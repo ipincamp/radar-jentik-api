@@ -11,11 +11,15 @@ import (
 )
 
 type AuthService struct {
-	userRepo ports.UserRepository
+	userRepo     ports.UserRepository
+	tokenManager *auth.TokenManager
 }
 
-func NewAuthService(repo ports.UserRepository) ports.AuthService {
-	return &AuthService{userRepo: repo}
+func NewAuthService(repo ports.UserRepository, tm *auth.TokenManager) ports.AuthService {
+	return &AuthService{
+		userRepo:     repo,
+		tokenManager: tm,
+	}
 }
 
 func (s *AuthService) Register(ctx context.Context, req ports.RegisterRequest) error {
@@ -65,7 +69,7 @@ func (s *AuthService) Login(ctx context.Context, req ports.LoginRequest) (string
 	}
 
 	// 3. Generate Token
-	token, err := auth.GenerateToken(user.ID, user.Role)
+	token, err := s.tokenManager.GenerateToken(user.ID, user.Role)
 	if err != nil {
 		return "", err
 	}
