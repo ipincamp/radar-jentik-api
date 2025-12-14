@@ -4,7 +4,10 @@ import (
 	"log"
 
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driven/postgres"
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driven/postgres/repositories"
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http"
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/handlers"
+	"github.com/ipincamp/radar-jentik-api/internal/core/services"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
 
@@ -32,8 +35,16 @@ func main() {
 		log.Println("Berhasil terhubung ke database PostgreSQL")
 	}
 
+	// 3. Dependency Injection (DI) Container
+	// Repo
+	userRepo := repositories.NewUserRepo(db)
+	// Service
+	authService := services.NewAuthService(userRepo)
+	// Handler
+	authHandler := handlers.NewAuthHandler(authService)
+
 	// 3. Inisialisasi HTTP Adapter (Fiber)
-	httpServer := http.NewServer(cfg)
+	httpServer := http.NewServer(cfg, authHandler)
 
 	// 4. Jalankan Server
 	log.Printf("Menjalankan server di port %s pada environment %s", cfg.AppPort, cfg.AppEnv)
