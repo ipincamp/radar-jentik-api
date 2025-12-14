@@ -18,10 +18,10 @@ func NewAreaRepo(db *gorm.DB) ports.AreaRepository {
 }
 
 type Area struct {
-	ID       string
-	Name     string
-	Type     string
-	Boundary interface{} // Untuk clause.Expr
+	ID       string      `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
+	Name     string      `gorm:"type:varchar(100)"`
+	Type     string      `gorm:"type:varchar(50)"`
+	Boundary interface{} `gorm:"type:geometry(MultiPolygon, 4326)"` // Untuk clause.Expr
 }
 
 func (r *AreaRepo) Save(ctx context.Context, area *domain.Area, geoJSONGeometry string) error {
@@ -34,7 +34,16 @@ func (r *AreaRepo) Save(ctx context.Context, area *domain.Area, geoJSONGeometry 
 			Vars: []interface{}{geoJSONGeometry},
 		},
 	}
-	return r.db.WithContext(ctx).Table("areas").Create(&areaDB).Error
+
+	// ID harus di-generate oleh DB (karena tag default) dan Boundary adalah kolom geometri.
+	if err := r.db.WithContext(ctx).Table("areas").Create(&areaDB).Error; err != nil {
+		return err
+	}
+
+	// Kembalikan ID yang baru digenerate ke domain
+	area.ID = areaDB.ID
+
+	return nil
 }
 
 func (r *AreaRepo) FindAll(ctx context.Context) ([]*domain.Area, error) {
