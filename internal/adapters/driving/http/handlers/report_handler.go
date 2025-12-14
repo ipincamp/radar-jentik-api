@@ -20,23 +20,31 @@ func NewReportHandler(s ports.ReportService) *ReportHandler {
 
 func (h *ReportHandler) Create(c *fiber.Ctx) error {
 	var req ports.CreateReportRequest
+
+	// 1. Parsing Body
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid input"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Format input tidak valid"})
 	}
 
+	// 2. Validasi Input
 	if err := h.validator.Struct(req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Ambil User ID dari Token (disimpan di Locals oleh middleware auth)
+	// 3. Ambil User ID dari Context (Middleware Auth)
+	// Pastikan middleware Anda menyimpan claim "sub" atau "user_id" ke c.Locals
 	userID, ok := c.Locals("user_id").(string)
-	if !ok {
-		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	if !ok || userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized: User ID tidak ditemukan"})
 	}
 
+	// 4. Panggil Service
 	if err := h.service.Create(c.Context(), userID, req); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Gagal menyimpan laporan"})
+		// Log error di sisi server untuk debugging
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal menyimpan laporan"})
 	}
 
-	return c.Status(201).JSON(fiber.Map{"message": "Laporan berhasil dikirim"})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Laporan jentik berhasil dikirim",
+	})
 }
