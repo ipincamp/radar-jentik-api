@@ -16,6 +16,7 @@ type Server struct {
 	config        *config.Config
 	authHandler   *handlers.AuthHandler
 	reportHandler *handlers.ReportHandler
+	areaHandler   *handlers.AreaHandler
 }
 
 // NewServer menginisialisasi Fiber beserta middleware dasarnya
@@ -23,6 +24,7 @@ func NewServer(
 	cfg *config.Config,
 	authH *handlers.AuthHandler,
 	reportH *handlers.ReportHandler,
+	areaH *handlers.AreaHandler,
 ) *Server {
 	app := fiber.New(fiber.Config{
 		AppName: "Radar Jentik API",
@@ -39,6 +41,7 @@ func NewServer(
 		config:        cfg,
 		authHandler:   authH,
 		reportHandler: reportH,
+		areaHandler:   areaH,
 	}
 
 	// Setup Routes
@@ -65,6 +68,9 @@ func (s *Server) setupRoutes() {
 	reports.Post("/", s.reportHandler.Create)
 	reports.Get("/", s.reportHandler.GetAll)
 	reports.Patch("/:id/validate", s.reportHandler.Validate)
+
+	// Area Routes (GeoJSON)
+	api.Get("/areas", middleware.Protected(s.config), s.areaHandler.GetAll)
 }
 
 // healthCheck handler (bisa dipisah ke file handler sendiri jika logika membesar)
