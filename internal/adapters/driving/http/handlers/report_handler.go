@@ -63,3 +63,31 @@ func (h *ReportHandler) GetAll(c *fiber.Ctx) error {
 
 	return c.JSON(resp)
 }
+
+func (h *ReportHandler) Validate(c *fiber.Ctx) error {
+	reportID := c.Params("id")
+	var req ports.ValidateReportRequest
+
+	// 1. Parsing Body
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Format input tidak valid"})
+	}
+
+	// 2. Validasi Input (Status harus 'verified' atau 'rejected')
+	if err := h.validator.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// 3. Ambil ID Petugas dari Token (Verifier)
+	verifierID, ok := c.Locals("user_id").(string)
+	if !ok || verifierID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	// 4. Panggil Service
+	if err := h.service.Validate(c.Context(), reportID, verifierID, req); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal memvalidasi laporan"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Status laporan berhasil diperbarui"})
+}
