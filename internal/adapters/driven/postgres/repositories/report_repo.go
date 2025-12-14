@@ -114,3 +114,27 @@ func (r *ReportRepo) FindAll(ctx context.Context, page, limit int) ([]*domain.Re
 
 	return domainReports, total, nil
 }
+
+func (r *ReportRepo) FindByID(ctx context.Context, id string) (*domain.Report, error) {
+	var reportDB Report
+	// Mengambil data termasuk koordinat geometri
+	if err := r.db.WithContext(ctx).
+		Select("*, ST_Y(location::geometry) as latitude, ST_X(location::geometry) as longitude").
+		First(&reportDB, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return reportDB.ToDomain(), nil
+}
+
+func (r *ReportRepo) Update(ctx context.Context, d *domain.Report) error {
+	// Hanya update field yang relevan untuk proses validasi
+	return r.db.WithContext(ctx).Model(&Report{}).
+		Where("id = ?", d.ID).
+		Updates(map[string]interface{}{
+			"status":      d.Status,
+			"notes":       d.Notes,
+			"verifier_id": d.VerifierID,
+			"verified_at": d.VerifiedAt,
+			"updated_at":  time.Now(),
+		}).Error
+}
