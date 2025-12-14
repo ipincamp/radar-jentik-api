@@ -14,6 +14,11 @@ type CreateReportRequest struct {
 	Notes              string  `json:"notes"`
 }
 
+type ValidateReportRequest struct {
+	Status string `json:"status" validate:"required,oneof=verified rejected"`
+	Notes  string `json:"notes"`
+}
+
 // Struct untuk parameter Pagination
 type FindReportsRequest struct {
 	Page  int `query:"page"`
@@ -31,9 +36,12 @@ type PaginatedResponse struct {
 type ReportRepository interface {
 	Save(ctx context.Context, report *domain.Report) error
 	FindAll(ctx context.Context, page, limit int) ([]*domain.Report, int64, error)
+	FindByID(ctx context.Context, id string) (*domain.Report, error)
+	Update(ctx context.Context, report *domain.Report) error
 }
 
 type ReportService interface {
 	Create(ctx context.Context, reporterID string, req CreateReportRequest) error
 	GetAll(ctx context.Context, req FindReportsRequest) (*PaginatedResponse, error)
+	Validate(ctx context.Context, reportID, verifierID string, req ValidateReportRequest) error
 }
