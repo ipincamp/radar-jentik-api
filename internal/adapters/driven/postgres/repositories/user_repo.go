@@ -14,7 +14,7 @@ type UserRepo struct {
 	db *gorm.DB
 }
 
-type UserSchema struct {
+type User struct {
 	ID string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
 
 	Name     string `gorm:"type:varchar(100)"`
@@ -28,7 +28,7 @@ type UserSchema struct {
 }
 
 // Helper: Mapper dari Schema DB ke Domain (Untuk Read)
-func (u *UserSchema) ToDomain() *domain.User {
+func (u *User) ToDomain() *domain.User {
 	return &domain.User{
 		ID:        u.ID,
 		Name:      u.Name,
@@ -41,8 +41,8 @@ func (u *UserSchema) ToDomain() *domain.User {
 }
 
 // Helper: Mapper dari Domain ke Schema DB (Untuk Write)
-func FromDomain(u *domain.User) *UserSchema {
-	return &UserSchema{
+func FromDomain(u *domain.User) *User {
+	return &User{
 		ID:       u.ID,
 		Name:     u.Name,
 		Username: u.Username,
@@ -74,13 +74,18 @@ func (r *UserRepo) Save(ctx context.Context, user *domain.User) error {
 }
 
 func (r *UserRepo) FindByUsername(ctx context.Context, username string) (*domain.User, error) {
-	var user domain.User
-	// Cari berdasarkan username
-	if err := r.db.WithContext(ctx).Where("username = ?", username).First(&user).Error; err != nil {
+	var userDB User
+
+	// Menggunakan struct User untuk mapping hasil query
+	err := r.db.WithContext(ctx).Where("username = ?", username).First(&userDB).Error
+
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil // Tidak error, tapi data kosong
+			return nil, nil // Return nil jika user tidak ditemukan
 		}
 		return nil, err
 	}
-	return &user, nil
+
+	// Konversi balik ke Domain agar Core tidak tahu tentang GORM
+	return userDB.ToDomain(), nil
 }
