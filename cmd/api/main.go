@@ -42,15 +42,18 @@ func main() {
 
 	// B. Init Repository
 	userRepo := repositories.NewUserRepo(db)
+	reportRepo := repositories.NewReportRepo(db)
 
 	// C. Init Service (Inject Repo & TokenManager)
 	authService := services.NewAuthService(userRepo, tokenManager)
+	reportService := services.NewReportService(reportRepo)
 
 	// D. Init Handler
 	authHandler := handlers.NewAuthHandler(authService)
+	reportHandler := handlers.NewReportHandler(reportService)
 
 	// 4. Inisialisasi HTTP Adapter (Fiber)
-	httpServer := http.NewServer(cfg, authHandler)
+	httpServer := http.NewServer(cfg, authHandler, reportHandler)
 
 	// 5. Jalankan Server
 	log.Printf("Menjalankan server di port %s pada environment %s", cfg.AppPort, cfg.AppEnv)
