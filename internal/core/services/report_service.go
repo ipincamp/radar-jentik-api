@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
@@ -59,4 +60,22 @@ func (s *ReportService) GetAll(ctx context.Context, req ports.FindReportsRequest
 		Page:     req.Page,
 		LastPage: lastPage,
 	}, nil
+}
+
+func (s *ReportService) Validate(ctx context.Context, reportID, verifierID string, req ports.ValidateReportRequest) error {
+	// 1. Cari laporan berdasarkan ID
+	report, err := s.repo.FindByID(ctx, reportID)
+	if err != nil {
+		return err // Bisa dikembangkan dengan custom error "Report Not Found"
+	}
+
+	// 2. Update status dan data verifikator
+	now := time.Now()
+	report.Status = req.Status
+	report.Notes = req.Notes
+	report.VerifierID = &verifierID
+	report.VerifiedAt = &now
+
+	// 3. Simpan perubahan
+	return s.repo.Update(ctx, report)
 }
