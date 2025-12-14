@@ -8,6 +8,7 @@ import (
 // Urutan dalam slice ini PENTING. Jangan ubah urutan migrasi lama.
 func GetMigrations() []*gormigrate.Migration {
 	return []*gormigrate.Migration{
+		CreateUsersTable(),
 		// Migrasi baru...
 	}
 }
