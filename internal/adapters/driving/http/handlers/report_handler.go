@@ -48,3 +48,18 @@ func (h *ReportHandler) Create(c *fiber.Ctx) error {
 		"message": "Laporan jentik berhasil dikirim",
 	})
 }
+
+func (h *ReportHandler) GetAll(c *fiber.Ctx) error {
+	// Parsing Query Params (otomatis mapping ke struct berdasar tag query)
+	req := ports.FindReportsRequest{
+		Page:  c.QueryInt("page", 1),
+		Limit: c.QueryInt("limit", 10),
+	}
+
+	resp, err := h.service.GetAll(c.Context(), req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(resp)
+}
