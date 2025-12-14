@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
 
@@ -17,5 +18,14 @@ func main() {
 	// Tampilkan info (hanya untuk debug)
 	log.Printf("Aplikasi berjalan di environment: %s", cfg.AppEnv)
 	log.Printf("Database target: %s:%s/%s", cfg.DBHost, cfg.DBPort, cfg.DBName)
+
+	// 2. Inisialisasi Fiber
+	app := fiber.New()
+
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Hello, World!")
+	})
+
+	app.Listen(cfg.AppPort)
 
 }
