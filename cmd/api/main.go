@@ -8,6 +8,7 @@ import (
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http"
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/handlers"
 	"github.com/ipincamp/radar-jentik-api/internal/core/services"
+	"github.com/ipincamp/radar-jentik-api/pkg/auth"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
 
@@ -36,17 +37,22 @@ func main() {
 	}
 
 	// 3. Dependency Injection (DI) Container
-	// Repo
+	// A. Init Token Manager (Auth Utility)
+	tokenManager := auth.NewTokenManager(cfg)
+
+	// B. Init Repository
 	userRepo := repositories.NewUserRepo(db)
-	// Service
-	authService := services.NewAuthService(userRepo)
-	// Handler
+
+	// C. Init Service (Inject Repo & TokenManager)
+	authService := services.NewAuthService(userRepo, tokenManager)
+
+	// D. Init Handler
 	authHandler := handlers.NewAuthHandler(authService)
 
-	// 3. Inisialisasi HTTP Adapter (Fiber)
+	// 4. Inisialisasi HTTP Adapter (Fiber)
 	httpServer := http.NewServer(cfg, authHandler)
 
-	// 4. Jalankan Server
+	// 5. Jalankan Server
 	log.Printf("Menjalankan server di port %s pada environment %s", cfg.AppPort, cfg.AppEnv)
 	if err := httpServer.Run(); err != nil {
 		log.Fatalf("Server gagal berjalan: %v", err)
