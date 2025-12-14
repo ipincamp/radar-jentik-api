@@ -5,17 +5,19 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/handlers"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
 
 // Server struct bertindak sebagai Driving Adapter untuk HTTP
 type Server struct {
-	app    *fiber.App
-	config *config.Config
+	app         *fiber.App
+	config      *config.Config
+	authHandler *handlers.AuthHandler
 }
 
 // NewServer menginisialisasi Fiber beserta middleware dasarnya
-func NewServer(cfg *config.Config) *Server {
+func NewServer(cfg *config.Config, authH *handlers.AuthHandler) *Server {
 	app := fiber.New(fiber.Config{
 		AppName: "Radar Jentik API",
 		// Prefork: true, // Bisa diaktifkan nanti untuk Production performance
@@ -27,8 +29,9 @@ func NewServer(cfg *config.Config) *Server {
 	app.Use(cors.New())    // Mengizinkan akses dari Frontend/Mobile
 
 	server := &Server{
-		app:    app,
-		config: cfg,
+		app:         app,
+		config:      cfg,
+		authHandler: authH,
 	}
 
 	// Setup Routes
@@ -43,6 +46,12 @@ func (s *Server) setupRoutes() {
 
 	// Health Check Endpoint
 	api.Get("/health", s.healthCheck)
+
+	// Auth Routes
+	auth := api.Group("/auth")
+	auth.Post("/register", s.authHandler.Register)
+	auth.Post("/login", s.authHandler.Login)
+	auth.Post("/logout", s.authHandler.Logout)
 }
 
 // healthCheck handler (bisa dipisah ke file handler sendiri jika logika membesar)
