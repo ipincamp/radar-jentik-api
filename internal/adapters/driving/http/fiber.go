@@ -63,6 +63,7 @@ func (s *Server) setupRoutes() {
 	// Report Routes (Protected)
 	reports := api.Group("/reports", middleware.Protected(s.config))
 	reports.Post("/", s.reportHandler.Create)
+	reports.Get("/", s.reportHandler.GetAll)
 }
 
 // healthCheck handler (bisa dipisah ke file handler sendiri jika logika membesar)
