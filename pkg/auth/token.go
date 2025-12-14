@@ -3,21 +3,38 @@ package auth
 import (
 	"time"
 
+	"github.com/ipincamp/radar-jentik-api/pkg/config"
 	"github.com/o1egl/paseto"
 )
 
-var (
-	secretKey = []byte("RAHASIA_DAPUR_JANGAN_DISHARE_YA") // TODO: Pindah ke env variable
-	pst       = paseto.NewV2()
-)
+// TokenManager struct menampung konfigurasi agar tidak hardcode
+type TokenManager struct {
+	paseto      *paseto.V2
+	secretKey   []byte
+	expDuration time.Duration
+	audience    string
+	issuer      string
+}
 
-func GenerateToken(userID, role string) (string, error) {
+// NewTokenManager membuat instance baru dengan config yang disuntikkan
+func NewTokenManager(cfg *config.Config) *TokenManager {
+	return &TokenManager{
+		paseto:      paseto.NewV2(),
+		secretKey:   []byte(cfg.PasetoSecret),
+		expDuration: cfg.PasetoExp,
+		audience:    cfg.PasetoAudience,
+		issuer:      cfg.PasetoIssuer,
+	}
+}
+
+// GenerateToken sekarang menjadi method dari struct TokenManager
+func (tm *TokenManager) GenerateToken(userID, role string) (string, error) {
 	now := time.Now()
-	exp := now.Add(24 * time.Hour) // TODO: Sesuaikan durasi token
+	exp := now.Add(tm.expDuration)
 
 	jsonToken := paseto.JSONToken{
-		Audience:   "radar-jentik-app", // TODO: Sesuaikan audience
-		Issuer:     "radar-jentik-api", // TODO: Sesuaikan issuer
+		Audience:   tm.audience,
+		Issuer:     tm.issuer,
 		Jti:        userID,
 		Subject:    userID,
 		IssuedAt:   now,
@@ -28,5 +45,5 @@ func GenerateToken(userID, role string) (string, error) {
 	// Masukkan Custom Claim (Role) ke Footer
 	footer := map[string]string{"role": role}
 
-	return pst.Encrypt(secretKey, jsonToken, footer)
+	return tm.paseto.Encrypt(tm.secretKey, jsonToken, footer)
 }
