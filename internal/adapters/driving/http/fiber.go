@@ -6,18 +6,24 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/handlers"
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/middleware"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
 
 // Server struct bertindak sebagai Driving Adapter untuk HTTP
 type Server struct {
-	app         *fiber.App
-	config      *config.Config
-	authHandler *handlers.AuthHandler
+	app           *fiber.App
+	config        *config.Config
+	authHandler   *handlers.AuthHandler
+	reportHandler *handlers.ReportHandler
 }
 
 // NewServer menginisialisasi Fiber beserta middleware dasarnya
-func NewServer(cfg *config.Config, authH *handlers.AuthHandler) *Server {
+func NewServer(
+	cfg *config.Config,
+	authH *handlers.AuthHandler,
+	reportH *handlers.ReportHandler,
+) *Server {
 	app := fiber.New(fiber.Config{
 		AppName: "Radar Jentik API",
 		// Prefork: true, // Bisa diaktifkan nanti untuk Production performance
@@ -29,9 +35,10 @@ func NewServer(cfg *config.Config, authH *handlers.AuthHandler) *Server {
 	app.Use(cors.New())    // Mengizinkan akses dari Frontend/Mobile
 
 	server := &Server{
-		app:         app,
-		config:      cfg,
-		authHandler: authH,
+		app:           app,
+		config:        cfg,
+		authHandler:   authH,
+		reportHandler: reportH,
 	}
 
 	// Setup Routes
@@ -42,7 +49,7 @@ func NewServer(cfg *config.Config, authH *handlers.AuthHandler) *Server {
 
 // setupRoutes mendaftarkan semua endpoint
 func (s *Server) setupRoutes() {
-	api := s.app.Group("/api")
+	api := s.app.Group("/api/v1")
 
 	// Health Check Endpoint
 	api.Get("/health", s.healthCheck)
@@ -51,7 +58,11 @@ func (s *Server) setupRoutes() {
 	auth := api.Group("/auth")
 	auth.Post("/register", s.authHandler.Register)
 	auth.Post("/login", s.authHandler.Login)
-	auth.Post("/logout", s.authHandler.Logout)
+	auth.Post("/logout", middleware.Protected(s.config), s.authHandler.Logout)
+
+	// Report Routes (Protected)
+	reports := api.Group("/reports", middleware.Protected(s.config))
+	reports.Post("/", s.reportHandler.Create)
 }
 
 // healthCheck handler (bisa dipisah ke file handler sendiri jika logika membesar)
