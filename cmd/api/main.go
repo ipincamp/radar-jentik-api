@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driven/postgres"
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
@@ -18,10 +19,23 @@ func main() {
 	log.Printf("Aplikasi berjalan di environment: %s", cfg.AppEnv)
 	log.Printf("Database target: %s:%s/%s", cfg.DBHost, cfg.DBPort, cfg.DBName)
 
-	// 2. Inisialisasi HTTP Adapter (Fiber)
+	// 2. Inisialisasi Database (Driven Adapter)
+	db, err := postgres.NewConnection(cfg)
+	if err != nil {
+		log.Fatalf("Gagal terhubung ke database: %v", err)
+	}
+	// Cek koneksi database
+	sqlDB, _ := db.DB()
+	if err := sqlDB.Ping(); err != nil {
+		log.Fatalf("Database tidak merespon: %v", err)
+	} else {
+		log.Println("Berhasil terhubung ke database PostgreSQL")
+	}
+
+	// 3. Inisialisasi HTTP Adapter (Fiber)
 	httpServer := http.NewServer(cfg)
 
-	// 3. Jalankan Server
+	// 4. Jalankan Server
 	log.Printf("Menjalankan server di port %s pada environment %s", cfg.AppPort, cfg.AppEnv)
 	if err := httpServer.Run(); err != nil {
 		log.Fatalf("Server gagal berjalan: %v", err)
