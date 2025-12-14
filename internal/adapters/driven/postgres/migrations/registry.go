@@ -10,6 +10,7 @@ func GetMigrations() []*gormigrate.Migration {
 	return []*gormigrate.Migration{
 		CreateUsersTable(),
 		CreateReportsTable(),
+		CreateAreasTable(),
 		// Migrasi baru...
 	}
 }
