@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
 
@@ -14,18 +14,17 @@ func main() {
 		// Log fatal akan menghentikan aplikasi jika config gagal
 		log.Fatalf("Gagal memuat konfigurasi: %v", err)
 	}
-
 	// Tampilkan info (hanya untuk debug)
 	log.Printf("Aplikasi berjalan di environment: %s", cfg.AppEnv)
 	log.Printf("Database target: %s:%s/%s", cfg.DBHost, cfg.DBPort, cfg.DBName)
 
-	// 2. Inisialisasi Fiber
-	app := fiber.New()
+	// 2. Inisialisasi HTTP Adapter (Fiber)
+	httpServer := http.NewServer(cfg)
 
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello, World!")
-	})
-
-	app.Listen(cfg.AppPort)
+	// 3. Jalankan Server
+	log.Printf("Menjalankan server di port %s pada environment %s", cfg.AppPort, cfg.AppEnv)
+	if err := httpServer.Run(); err != nil {
+		log.Fatalf("Server gagal berjalan: %v", err)
+	}
 
 }
