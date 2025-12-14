@@ -30,7 +30,7 @@ func (r *AreaRepo) Save(ctx context.Context, area *domain.Area, geoJSONGeometry 
 		Name: area.Name,
 		Type: area.Type,
 		Boundary: clause.Expr{
-			SQL:  "ST_SetSRID(ST_GeomFromGeoJSON(?), 4326)",
+			SQL:  "ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON(?)), 4326)",
 			Vars: []interface{}{geoJSONGeometry},
 		},
 	}
