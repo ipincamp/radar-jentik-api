@@ -82,31 +82,39 @@ func (r *ReportRepo) Save(ctx context.Context, d *domain.Report) error {
 }
 
 // Implementasi FindAll
-func (r *ReportRepo) FindAll(ctx context.Context, page, limit int) ([]*domain.Report, int64, error) {
+func (r *ReportRepo) FindAll(ctx context.Context, page, limit int, filterUserID *string) ([]*domain.Report, int64, error) {
 	var reports []Report
 	var total int64
 
 	offset := (page - 1) * limit
 
-	// 1. Hitung Total Data (untuk pagination)
-	if err := r.db.WithContext(ctx).Model(&Report{}).Count(&total).Error; err != nil {
+	// 1. Build Query Dasar
+	query := r.db.WithContext(ctx).Model(&Report{})
+
+	// 2. Terapkan Filter User ID jika ada (Data Scoping)
+	if filterUserID != nil {
+		query = query.Where("reporter_id = ?", *filterUserID)
+	}
+
+	// 3. Hitung Total (dengan filter yg sudah terpasang)
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// 2. Query Data dengan Ekstraksi PostGIS
+	// 4. Select Data (dengan filter yg sama) + PostGIS extraction
 	// ST_Y = Latitude, ST_X = Longitude
-	query := r.db.WithContext(ctx).
+	err := query.
 		Select("*, ST_Y(location::geometry) as latitude, ST_X(location::geometry) as longitude").
 		Order("created_at DESC"). // Urutkan dari yang terbaru
 		Limit(limit).
 		Offset(offset).
-		Find(&reports)
+		Find(&reports).Error
 
-	if query.Error != nil {
-		return nil, 0, query.Error
+	if err != nil {
+		return nil, 0, err
 	}
 
-	// 3. Konversi ke Domain
+	// 5. Konversi ke Domain
 	domainReports := make([]*domain.Report, len(reports))
 	for i, r := range reports {
 		domainReports[i] = r.ToDomain()
