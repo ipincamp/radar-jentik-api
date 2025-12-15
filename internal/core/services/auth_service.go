@@ -76,3 +76,7 @@ func (s *AuthService) Login(ctx context.Context, req ports.LoginRequest) (string
 
 	return token, nil
 }
+
+func (s *AuthService) GetAllUsers(ctx context.Context) ([]*domain.User, error) {
+	return s.userRepo.FindAll(ctx)
+}
