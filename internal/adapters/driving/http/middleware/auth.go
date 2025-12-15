@@ -34,16 +34,17 @@ func Protected(cfg *config.Config) fiber.Handler {
 		tokenManager := auth.NewTokenManager(cfg)
 
 		// 4. Validasi Token
-		userID, err := tokenManager.ValidateToken(tokenString)
+		userID, role, err := tokenManager.ValidateToken(tokenString)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Unauthorized: " + err.Error(),
 			})
 		}
 
-		// 5. Simpan User ID ke Context (Locals)
+		// 5. Simpan User ID dan Role ke Context (Locals)
 		// Ini adalah kunci agar handler selanjutnya bisa mengenali user
 		c.Locals("user_id", userID)
+		c.Locals("role", role)
 
 		// 6. Lanjut ke Handler berikutnya
 		return c.Next()
