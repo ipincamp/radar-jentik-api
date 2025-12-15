@@ -19,7 +19,8 @@ This guide covers different deployment strategies for the Radar Jentik API.
 ## Prerequisites
 
 - Server with Ubuntu 20.04+ or similar Linux distribution
-- Minimum 1GB RAM, 1 CPU core, 10GB storage
+- Minimum 2GB RAM, 2 CPU cores, 20GB storage (for PostGIS support)
+- PostgreSQL 16 with PostGIS 3.5 extension
 - Domain name (optional, for HTTPS)
 - SSH access to server
 
@@ -34,7 +35,7 @@ Create a `.env` file for production with secure values:
 APP_PORT=:3000
 APP_ENV=production
 
-# Database Configuration
+# Database Configuration (PostgreSQL with PostGIS)
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=radar_jentik_prod
@@ -49,6 +50,11 @@ PASETO_EXP_DURATION=24h
 PASETO_AUDIENCE=radar-jentik-app
 PASETO_ISSUER=radar-jentik-api
 ```
+
+**Important Notes:**
+- Database must have PostGIS extension enabled
+- Use `postgis/postgis:16-3.5-alpine` Docker image for PostGIS support
+- Ensure sufficient storage for spatial data and heatmap calculations
 
 ### Generating Secure Keys
 
@@ -132,12 +138,7 @@ services:
       - PASETO_ISSUER=${PASETO_ISSUER}
     depends_on:
       db:
-        condition: service_healthy
-    networks:
-      - rj_network
-
-  db:
-    image: postgres:16-alpine
+        conditiois/postgis:16-3.5-alpine
     container_name: rj_postgres
     restart: unless-stopped
     environment:
@@ -148,6 +149,13 @@ services:
       - rj_data:/var/lib/postgresql/data
     networks:
       - rj_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # PostGIS-specific configuration
+    command: postgres -c shared_preload_libraries=postgis-3rk
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
       interval: 10s
@@ -195,10 +203,20 @@ EXPOSE 3000
 CMD ["./main"]
 ```
 
-6. **Deploy:**
+6. **Deploy:**go run cmd/migrate/main.go
+
+# (Optional) Seed area data
+docker-compose -f docker-compose.prod.yml exec api go run cmd/seeder/main.go /path/to/geojson.txt
+
+# Check logs
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+**PostGIS Verification:**
 
 ```bash
-# Build and start
+# Verify PostGIS extension
+docker-compose -f docker-compose.prod.yml exec db psql -U ${DB_USERNAME} -d ${DB_NAME} -c "SELECT PostGIS_version();"
 docker-compose -f docker-compose.prod.yml up -d
 
 # Run migrations
@@ -215,8 +233,8 @@ docker-compose -f docker-compose.prod.yml logs -f
 docker swarm init
 
 # Deploy stack
-docker stack deploy -c docker-compose.prod.yml radar_jentik
-
+docker stack deploy  with PostGIS
+sudo apt install postgresql postgresql-contrib postgis postgresql-16-postgis-3
 # Check services
 docker service ls
 
@@ -230,18 +248,48 @@ docker service scale radar_jentik_api=3
 
 ```bash
 # Update system
-sudo apt update && sudo apt upgrade -y
+sudo apt update && sud with PostGIS
 
-# Install PostgreSQL
-sudo apt install postgresql postgresql-contrib -y
+```bash
+# Switch to postgres user
+sudo -u postgres psql
 
-# Install Go
-wget https://go.dev/dl/go1.25.5.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.25.5.linux-amd64.tar.gz
-echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-source ~/.bashrc
+# In PostgreSQL shell:
+CREATE DATABASE radar_jentik_prod;
+CREATE USER rj_user WITH PASSWORD 'your_secure_password';
+GRANT ALL PRIVILEGES ON DATABASE radar_jentik_prod TO rj_user;
+
+# Connect to the database
+\c radar_jentik_prod
+
+# Enable PostGIS extension
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS postgis_topology;
+
+# Verify PostGIS installation
+SELECT PostGIS_version();
+
+# Grant necessary permissions
+GRANT ALL ON geometry_columns TO rj_user;
+GRANT ALL ON spatial_ref_sys TO rj_user;
+
+\q
 ```
 
+**PostGIS Extension Verification:**
+```bash
+# Check PostGIS functions
+suBuild migration tool
+go build -o migrate ./cmd/migrate/main.go
+
+# Build seeder tool
+go build -o seeder ./cmd/seeder/main.go
+
+# Run migrations
+./migrate
+
+# (Optional) Seed area data
+./seeder /path/to/geojson.txt
 #### 2. Setup Database
 
 ```bash
@@ -320,21 +368,36 @@ sudo systemctl status radar-jentik-api
 
 ### Cloud Deployment (VPS)
 
-#### AWS EC2
+#### AWS EC26/main/postgresql.conf
 
-1. **Launch EC2 instance:**
-   - Ubuntu 20.04 LTS
-   - t2.micro or better
-   - Security group: allow SSH (22), HTTP (80), HTTPS (443)
+# Recommended settings for PostGIS:
+max_connections = 100
+shared_buffers = 512MB          # Increased for spatial data
+effective_cache_size = 2GB       # Increased for better query performance
+maintenance_work_mem = 128MB     # Increased for spatial indexing
+checkpoint_completion_target = 0.9
+wal_buffers = 16MB
+default_statistics_target = 100
+random_page_cost = 1.1
+effective_io_concurrency = 200
+work_mem = 4MB                   # Increased for spatial operations
+min_wal_size = 1GB
+max_wal_size = 4GB
 
-2. **Connect and deploy:**
-
-```bash
-ssh -i your-key.pem ubuntu@your-ec2-ip
-
-# Follow "Bare Metal Deployment" steps above
+# PostGIS-specific settings
+shared_preload_libraries = 'postgis-3'
 ```
 
+**Spatial Index Optimization:**
+
+```sql
+-- Create spatial indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_reports_location ON reports USING GIST (location);
+CREATE INDEX IF NOT EXISTS idx_areas_geometry ON areas USING GIST (geometry);
+
+-- Vacuum and analyze for spatial data
+VACUUM ANALYZE reports;
+VACUUM ANALYZE areas;
 #### DigitalOcean Droplet
 
 1. **Create Droplet:**
@@ -533,23 +596,61 @@ git checkout previous-version
 go build -o radar-jentik-api ./cmd/api/main.go
 sudo systemctl start radar-jentik-api
 ```
+User indexes
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 
-## Troubleshooting
+-- Report indexes
+CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 
-### Application Won't Start
+-- Spatial indexes (GIST for geometry types)
+CREATE INDEX IF NOT EXISTS idx_reports_location ON reports USING GIST (location);
+CREATE INDEX IF NOT EXISTS idx_areas_geometry ON areas USING GIST (geometry);
 
-```bash
-# Check logs
+-- Composite indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_reports_status_user ON reports(status, user_id);
+
+-- Analyze tables for query planner
+ANALYZE users;
+ANALYZE reports;
+ANALYZE areas;
+```
+
+**Spatial Query Performance Tips:**
+- Always use spatial indexes (GIST) for geometry columns
+- Use `ST_DWithin` instead of `ST_Distance` for distance queries
+- Pre-filter with bounding box queries before complex spatial operations
+- Consider using simplified geometries for large-scale visualizationsheck logs
 sudo journalctl -u radar-jentik-api -n 50
 
 # Common issues:
 # - Database connection: Check DB credentials in .env
 # - Port in use: lsof -i :3000
-# - Permissions: Check file ownership
+# - Permissions: Check fil - important for spatial data
+vacuumdb -U rj_user -d radar_jentik_prod -z -v
+
+# Reindex (monthly) - includes spatial indexes
+reindexdb -U rj_user -d radar_jentik_prod
+
+# Update spatial statistics (monthly)
+sudo -u postgres psql -d radar_jentik_prod <<EOF
+VACUUM ANALYZE reports;
+VACUUM ANALYZE areas;
+SELECT UpdateGeometrySRID('reports', 'location', 4326);
+SELECT UpdateGeometrySRID('areas', 'geometry', 4326);
+EOF
 ```
 
-### Database Connection Issues
+**PostGIS-Specific Maintenance:**
+```bash
+# Check spatial reference systems
+psql -U rj_user -d radar_jentik_prod -c "SELECT * FROM spatial_ref_sys WHERE srid=4326;"
 
+# Validate geometries
+psql -U rj_user -d radar_jentik_prod -c "SELECT id, ST_IsValid(location) FROM reports WHERE NOT ST_IsValid(location);"
 ```bash
 # Test PostgreSQL connection
 psql -U rj_user -h localhost -d radar_jentik_prod

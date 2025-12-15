@@ -26,33 +26,52 @@ Radar Jentik API is a backend service designed to support the Radar Jentik appli
 
 ## ✨ Features
 
-- **User Authentication**
-  - User Registration with validation
+- **User Authentication & Authorization**
+  - User Registration with role assignment (kader/petugas)
   - User Login with secure password verification
   - Stateless Logout
+  - Role-based access control (RBAC)
+  - User management for administrators
+  
+- **Report Management**
+  - Create mosquito larvae reports with geolocation
+  - View paginated reports with role-based filtering
+  - Report validation workflow (pending → valid/rejected)
+  - Status tracking with verifier information
+  - Geographic data storage using PostGIS
+  
+- **Spatial Analysis**
+  - Area boundary management with MultiPolygon support
+  - GeoJSON import/export functionality
+  - Heatmap generation using Inverse Distance Weighting (IDW) algorithm
+  - Customizable risk estimation grid
   
 - **Security**
   - Password hashing with Argon2id
   - Token generation using PASETO v2
-  - Role-based access control (RBAC)
+  - Role-based data scoping (kader vs petugas)
+  - Protected endpoints with middleware authentication
   
 - **Infrastructure**
-  - PostgreSQL database with GORM ORM
+  - PostgreSQL 16 with PostGIS extension
+  - GORM ORM with spatial data support
   - Docker containerization
-  - Database migrations
+  - Database migrations system
+  - CLI seeder tool for area data
   - Environment-based configuration
 
 ## 🛠 Tech Stack
 
 - **Language:** Go 1.25.5
 - **Web Framework:** Fiber v2.52.10
-- **Database:** PostgreSQL 16
-- **ORM:** GORM v1.31.1
+- **Database:** PostgreSQL 16 with PostGIS 3.5
+- **ORM:** GORM v1.31.1 with spatial support
 - **Token:** PASETO (o1egl/paseto v1.0.0)
 - **Password Hashing:** Argon2id (alexedwards/argon2id v1.0.0)
 - **Validation:** go-playground/validator v10.29.0
 - **Migration:** gormigrate v2.1.5
 - **Configuration:** godotenv v1.5.1
+- **Spatial:** PostGIS for geographic data (ST_MakePoint, ST_GeomFromGeoJSON, etc.)
 - **Containerization:** Docker & Docker Compose
 
 ## 🏗 Architecture
@@ -99,8 +118,10 @@ radar_jentik_api/
 ├── cmd/                          # Application entry points
 │   ├── api/                      # Main API application
 │   │   └── main.go               # Application bootstrap
-│   └── migrate/                  # Migration CLI tool
-│       └── main.go               # Migration runner
+│   ├── migrate/                  # Migration CLI tool
+│   │   └── main.go               # Migration runner
+│   └── seeder/                   # Data seeder CLI tool
+│       └── main.go               # GeoJSON seeder for areas
 │
 ├── internal/                     # Private application code
 │   ├── adapters/                 # Adapter layer
@@ -108,19 +129,37 @@ radar_jentik_api/
 │   │   │   └── postgres/         # PostgreSQL adapter
 │   │   │       ├── db.go         # Database connection
 │   │   │       ├── migrations/   # Migration files
+│   │   │       │   ├── 20251214000001_create_users_table.go
+│   │   │       │   ├── 20251214000002_create_reports_table.go
+│   │   │       │   ├── 20251214000003_create_areas_table.go
+│   │   │       │   └── registry.go
 │   │   │       └── repositories/ # Data access implementations
+│   │   │           ├── user_repo.go
+│   │   │           ├── report_repo.go
+│   │   │           └── area_repo.go
 │   │   └── driving/              # UI/API adapters
 │   │       └── http/             # HTTP/REST adapter
 │   │           ├── fiber.go      # Fiber server setup
-│   │           └── handlers/     # HTTP request handlers
+│   │           ├── handlers/     # HTTP request handlers
+│   │           │   ├── auth_handler.go
+│   │           │   ├── report_handler.go
+│   │           │   └── area_handler.go
+│   │           └── middleware/   # HTTP middleware
+│   │               └── auth.go   # PASETO token validation
 │   │
 │   └── core/                     # Business logic core
 │       ├── domain/               # Domain entities
-│       │   └── user.go           # User entity
+│       │   ├── user.go           # User entity
+│       │   ├── report.go         # Report entity
+│       │   └── area.go           # Area entity
 │       ├── ports/                # Interface definitions
-│       │   └── auth.go           # Auth service interface
+│       │   ├── auth.go           # Auth service interface
+│       │   ├── report.go         # Report service interface
+│       │   └── area.go           # Area service interface
 │       └── services/             # Business logic implementations
-│           └── auth_service.go   # Auth service implementation
+│           ├── auth_service.go   # Auth service implementation
+│           ├── report_service.go # Report & heatmap logic
+│           └── area_service.go   # Area service implementation
 │
 ├── pkg/                          # Public reusable packages
 │   ├── auth/                     # Authentication utilities
@@ -132,6 +171,9 @@ radar_jentik_api/
 ├── go.mod                        # Go module definition
 ├── go.sum                        # Go module checksums
 ├── .env                          # Environment variables (not in repo)
+├── API.md                        # API documentation
+├── DEPLOYMENT.md                 # Deployment guide
+├── CONTRIBUTING.md               # Contribution guidelines
 ├── LICENSE                       # Project license
 └── README.md                     # This file
 ```
@@ -163,7 +205,7 @@ cd radar-jentik-api
 
 ### 2. Install Go Dependencies
 
-```bash
+```bash (PostgreSQL with PostGIS)
 go mod download
 ```
 
@@ -235,7 +277,7 @@ docker-compose up -d
 ```
 
 This will start:
-- PostgreSQL 16 database on `localhost:5432`
+- PostgreSQL 16 with PostGIS 3.5 extension on `localhost:5432`
 
 2. **Run database migrations:**
 
@@ -243,7 +285,13 @@ This will start:
 go run cmd/migrate/main.go
 ```
 
-3. **Start the API server:**
+3. **Seed area data (optional):**
+
+```bash
+go run cmd/seeder/main.go /path/to/geojson/file.txt
+```
+
+4. **Start the API server:**
 
 ```bash
 go run cmd/api/main.go
@@ -275,79 +323,78 @@ go install github.com/cosmtrek/air@latest
 Run with hot reload:
 ```bash
 air
+For comprehensive API documentation, see [API.md](API.md).
+
+### Quick Reference
+
+#### Authentication (Public)
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login` - User login
+- `POST /api/v1/auth/logout` - User logout
+
+#### User Management (Protected - Petugas Only)
+- `GET /api/v1/auth/users` - List all users
+
+#### Reports (Protected)
+- `POST /api/v1/reports` - Create new report
+- `GET /api/v1/reports` - Get paginated reports (role-based filtering)
+- `PATCH /api/v1/reports/:id/validate` - Validate report
+- `GET /api/v1/reports/heatmap` - Get IDW heatmap data
+
+#### Areas (Protected)
+- `GET /api/v1/areas` - Get all areas (GeoJSON format)
+
+### Example: Create Report
+
+**Endpoint:** `POST /api/v1/reports`
+
+**Headers:**
 ```
-
-## 📚 API Endpoints
-
-Base URL: `http://localhost:3000/api/v1`
-
-### Authentication Endpoints
-
-#### 1. Register User
-
-**Endpoint:** `POST /api/v1/auth/register`
+Authorization: Bearer <token>
+Content-Type: application/json
+```
 
 **Request Body:**
 ```json
 {
-  "name": "John Doe",
-  "username": "johndoe",
-  "password": "securepassword123"
+  "location_name": "Jl. Merdeka No. 10",
+  "latitude": -7.250445,
+  "longitude": 112.768845,
+  "description": "Found mosquito larvae in water container"
 }
 ```
-
-**Validation Rules:**
-- `name`: Required
-- `username`: Required
-- `password`: Required, minimum 6 characters
 
 **Success Response (201):**
 ```json
 {
-  "message": "Registrasi berhasil"
+  "id": "uuid",
+  "user_id": "user-uuid",
+  "location_name": "Jl. Merdeka No. 10",
+  "latitude": -7.250445,
+  "longitude": 112.768845,
+  "description": "Found mosquito larvae in water container",
+  "status": "pending",
+  "created_at": "2025-12-15T09:00:00Z"
 }
 ```
 
-**Error Responses:**
-- `400 Bad Request`: Invalid input or validation error
-- `500 Internal Server Error`: Username already exists or server error
+### Example: Get Heatmap
 
----
+**Endpoint:** `GET /api/v1/reports/heatmap?res=50&p=2`
 
-#### 2. Login
-
-**Endpoint:** `POST /api/v1/auth/login`
-
-**Request Body:**
-```json
-{
-  "username": "johndoe",
-  "password": "securepassword123"
-}
-```
-
-**Validation Rules:**
-- `username`: Required
-- `password`: Required
+**Query Parameters:**
+- `res` (optional): Grid resolution, default 50
+- `p` (optional): IDW power parameter, default 2
 
 **Success Response (200):**
 ```json
-{
-  "token": "v2.local.Gdh5kiOTyyaQ3_bNykYDeYHO21Jg2..."
-}
-```
-
-**Error Responses:**
-- `400 Bad Request`: Invalid input
-- `401 Unauthorized`: Invalid username or password
-
----
-
-#### 3. Logout
-
-**Endpoint:** `POST /api/v1/auth/logout`
-
-**Description:** Since the API uses stateless authentication, logout is handled client-side by discarding the token.
+[
+  {
+    "latitude": -7.250445,
+    "longitude": 112.768845,
+    "risk_value": 0.85
+  }
+]*Description:** Since the API uses stateless authentication, logout is handled client-side by discarding the token.
 
 **Success Response (200):**
 ```json
@@ -385,6 +432,19 @@ go run cmd/migrate/main.go
 ```
 
 ### Current Migrations
+   - Roles: kader (default), petugas
+
+2. **20251214000002_create_reports_table.go**
+   - Creates `reports` table with PostGIS geometry
+   - Fields: id, user_id, location_name, location (geometry), description, status, verified_by, verified_at, timestamps
+   - Uses ST_MakePoint for location storage
+   - Status values: pending, verified, rejected
+
+3. **20251214000003_create_areas_table.go**
+   - Creates `areas` table with MultiPolygon support
+   - Fields: id, name, geometry (MultiPolygon), timestamps
+   - Uses ST_GeomFromGeoJSON for data import
+   - Supports 2D/3D GeoJSON with ST_Force2D
 
 1. **20251214000001_create_users_table.go**
    - Creates `users` table
@@ -413,8 +473,21 @@ go run cmd/migrate/main.go
   - `nbf`: Not Before
 - **Footer:** Contains user role for authorization
 
-**Why PASETO over JWT?**
-- Eliminates algorithm confusion attacks
+**Authentication:**
+- ✅ User Registration
+- ✅ User Login
+- ✅ User Logout
+- ✅ List Users (Petugas only)
+
+**Reports:**
+- ✅ Create Report
+- ✅ Get Reports (with pagination)
+- ✅ Validate Report (status transitions)
+- ✅ Get Heatmap Data (IDW algorithm)
+
+**Areas:**
+- ✅ Get Areas (GeoJSON export)
+- ✅ Seeder Tool (GeoJSON import)gorithm confusion attacks
 - No need to specify algorithms (misuse-resistant)
 - Encrypted payload (confidentiality)
 - Built-in expiration handling
@@ -445,42 +518,82 @@ go test -v ./...
 
 **Register:**
 ```bash
-curl -X POST http://localhost:3000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "John Doe",
-    "username": "johndoe",
-    "password": "password123"
-  }'
-```
+curl -X 2.0] - 2025-12-15
 
-**Login:**
-```bash
-curl -X POST http://localhost:3000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "johndoe",
-    "password": "password123"
-  }'
-```
+#### Added - Spatial Analysis & RBAC
+- Inverse Distance Weighting (IDW) algorithm for risk estimation heatmap
+- Customizable power parameter and grid resolution for heatmap
+- Role-based data scoping (Kader: own reports, Petugas: all reports)
+- User management endpoint (Petugas-only access)
+- Enhanced middleware with role extraction from PASETO token footer
 
-**Logout:**
-```bash
-curl -X POST http://localhost:3000/api/v1/auth/logout
-```
+#### Improvements
+- Explicit data filtering bypass for global heatmap visualization
+- Extended repository interfaces for flexible user filtering
+- Comprehensive RBAC implementation across all endpoints
 
-## 📝 Changelog
+### [v1.1.0] - 2025-12-14 (Evening)
 
-### [v1.0.0] - 2025-12-14
+#### Added - Geographic Features
+- Area boundary management with PostGIS MultiPolygon
+- GeoJSON import/export functionality
+- CLI seeder tool for area data initialization
+- ST_GeomFromGeoJSON and ST_AsGeoJSON integration
+- Support for 2D/3D GeoJSON with ST_Force2D
+- Protected endpoint for area data retrieval
+
+### [v1.0.1] - 2025-12-14 (Afternoon/Evening)
+
+#### Added - Report Management
+- Report creation with PostGIS geometry (ST_MakePoint)
+- Paginated report retrieval (GET /reports)
+- Report validation workflow (pending → valid/rejected)
+- Status tracking with verifier information and timestamps
+- Protected middleware for token validation
+- User ID injection into request context
+- FindByID and Update methods in repository
+- Comprehensive report management business logic
+
+### [v1.0.0] - 2025-12-14 (Initial Release)
 
 #### Added
 - Initial project setup with hexagonal architecture
-- Docker and Docker Compose configuration
+- Docker with PostGIS support (postgis/postgis:16-3.5-alpine)
 - Environment-based configuration with godotenv
 - Fiber web framework integration
-- GORM ORM with PostgreSQL driver
+- GORM ORM with PostgreSQL and PostGIS support
 - Database migration system
 - User authentication system
+  - User registration with role assignment
+  - User login with token generation
+  - Stateless logout
+- PASETO v2 token generation and management
+- Argon2id password hashing
+- Input validation with go-playground/validator
+- Black box testing for all authentication endpoints
+
+#### Security
+- Implemented Argon2id for secure password hashing
+- Implemented PASETO v2 for secure token management
+- Role-based access control (kader/petugas)
+
+#### Infrastructure
+- PostgreSQL 16 with PostGIS 3.5 extension
+- HealAdvanced spatial queries (radius search, polygon containment)
+- [ ] Real-time notifications for new reports
+- [ ] User profile management and updates
+- [ ] Password reset functionality with email
+- [ ] Email verification for registration
+- [ ] Rate limiting per endpoint
+- [ ] API documentation with Swagger/OpenAPI
+- [ ] Comprehensive unit and integration tests
+- [ ] CI/CD pipeline with GitHub Actions
+- [ ] Monitoring and logging (Prometheus, Grafana)
+- [ ] Report photo upload and storage
+- [ ] Report analytics and statistics dashboard
+- [ ] Mobile app support (Push notifications)
+- [ ] Multi-language support (i18n)
+- [ ] Export reports to CSV/Excel
   - User registration endpoint
   - User login endpoint
   - User logout endpoint

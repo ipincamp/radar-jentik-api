@@ -97,6 +97,11 @@ We are committed to providing a welcoming and inspiring community for everyone. 
 4. **Test your changes:**
    ```bash
    go test ./...
+   
+   # Test with PostGIS if spatial features
+   docker-compose up -d
+   go run cmd/migrate/main.go
+   go test ./internal/adapters/driven/postgres/repositories/...
    ```
 
 5. **Commit your changes** (see commit guidelines below)
@@ -370,11 +375,191 @@ When adding new features, follow this structure:
 ### Adding a New Endpoint
 
 1. **Define domain model** in `internal/core/domain/`
+   - Keep models framework-agnostic
+   - For spatial data, use `float64` for lat/lon in domain
+   - No GORM tags in domain entities
+
 2. **Define port interface** in `internal/core/ports/`
+   - Define repository interface
+   - Define service interface
+   - Define DTOs for requests/responses
+
 3. **Implement service** in `internal/core/services/`
+   - Implement business logic
+   - Handle validations
+
+**Spatial Data Migrations:**
+
+For tables with geometric columns:
+
+```go
+func (m *Migration20251214000002) Up(tx *gorm.DB) error {
+    // Use raw SQL for PostGIS types
+    return tx.Exec(`
+        CREATE TABLE reports (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            location GEOMETRY(Point, 4326) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- Create spatial index
+        CREATE INDEX idx_reports_location ON reports USING GIST (location);
+    `).Error
+}
+
+func (m *Migration20251214000002) Down(tx *gorm.DB) error {
+    return tx.Exec(`DROP TABLE IF EXISTS reports CASCADE`).Error
+}
+```
+
+**Important PostGIS Notes:**
+- Always specify SRID (4326 for WGS84/GPS coordinates)
+- Use `GIST` indexes for spatial columns
+- Use appropriate geometry types: `Point`, `Polygon`, `MultiPolygon`
+- Consider using `ST_Force2D` for 3D coordinates if only 2D needed
+   - Transform between DTOs and domain models
+
 4. **Implement repository** in `internal/adapters/driven/postgres/repositories/`
-5. **Implement handler** in `internal/adapters/driving/http/handlers/`
-6. **Register routes** in `internal/adapters/driving/http/fiber.go`
+   - Create databas with PostGIS
+- Clean up after tests
+- Test spatial queries
+
+**Example: Spatial Repository Test**
+
+```go
+func TestReportRepo_Create_WithLocation(t *testing.T) {
+    // Setup test database with PostGIS
+    db := setupTestDB(t)
+    defer cleanupTestDB(t, db)
+    
+    repo := NewReportRepo(db)
+    
+    // Test data
+    report := &domain.Report{
+        ID:        "test-id",
+        Latitude:  -7.250445,
+        Longitude: 112.768845,
+    }
+    
+    // Execute
+    err := repo.Create(context.Background(), report)
+    
+    // Assert
+    assert.NoError(t, err)
+    
+    // Verify spatial data
+    var lat, lon float64
+    err = db.Raw(
+        "SELECT ST_Y(location), ST_X(location) FROM reports WHERE id = ?",
+        report.ID,
+    ).Row().Scan(&lat, &lon)
+    
+    assert.NoError(t, err)
+    assert.InDelta(t, -7.250445, lat, 0.000001)
+    assert.InDelta(t, 112.768845, lon, 0.000001)
+}
+```
+
+### Running Tests
+
+```bash
+# All tests
+go test ./...
+
+# Specific package
+go test ./internal/core/services
+
+# Repository tests (requires PostGIS)
+docker-compose up -d
+go test ./internal/adapters/driven/postgres/repositories/...
+
+# With coverage
+go test -cover ./...
+
+# Verbose output
+go test -v ./...
+
+# Race detection
+go test -race ./...
+```
+
+### Black Box Testing
+
+Use Postman or similar tools to test endpoints:
+
+1. **Authentication Flow**
+   - Register new user
+   - Login to get token
+   - Use token for protected endpoints
+
+2. **Report Management**
+   - Create report with valid coordinates
+   - Verify report appears in list
+   - Test pagination
+   - Validate report as petugas
+
+3. **Spatial Features**
+   - Create reports at different locations
+   - Test heatmap generation with different parameters
+   - Verify GeoJSON export for areas
+
+4. **Role-Based Access**
+- Document PostGIS functions used
+
+**Example:**
+```go
+// CreateReport stores a new report with geolocation data.
+// The location is stored as a PostGIS POINT geometry using ST_MakePoint.
+// Coordinates must be in WGS84 (SRID 4326) format.
+func (r *ReportRepo) CreateReport(ctx context.Context, report *domain.Report) error {
+    // Implementation
+}
+```
+
+### API Documentation
+
+- Update `API.md` for new endpoints
+- Include request/response examples
+- Document error cases
+- Document query parameters
+- Include cURL examples
+- For spatial endpoints, document coordinate format
+
+### README Updates
+
+- Update README for significant changes
+- Keep installation instructions current
+- Update architecture diagrams if needed
+- Document new dependencies (e.g., PostGIS)
+
+### Changelog
+
+Update `.vscode/changelog.txt` with:
+- Date and time
+- Feature description
+- Technical implementation details
+- Testing verification notes
+}
+
+// Repository (internal/adapters/driven/postgres/repositories/report_repo.go)
+type ReportModel struct {
+    ID       string `gorm:"primaryKey"`
+    Location string `gorm:"type:geometry(Point,4326)"` // PostGIS geometry
+}
+
+func (r *ReportRepo) Create(ctx context.Context, report *domain.Report) error {
+    // Convert domain to database model with PostGIS
+    model := &ReportModel{
+        ID: report.ID,
+    }
+    
+    // Use raw SQL with ST_MakePoint
+    return r.db.Exec(
+        "INSERT INTO reports (id, location) VALUES (?, ST_SetSRID(ST_MakePoint(?, ?), 4326))",
+        model.ID, report.Longitude, report.Latitude,
+    ).Error
+}
+```
 
 ### Adding a New Migration
 
