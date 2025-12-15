@@ -56,6 +56,13 @@ func (h *ReportHandler) GetAll(c *fiber.Ctx) error {
 		Limit: c.QueryInt("limit", 10),
 	}
 
+	// Ambil data dari Token (via Middleware)
+	userID, _ := c.Locals("user_id").(string)
+	role, _ := c.Locals("role").(string)
+
+	req.RequestorID = userID
+	req.RequestorRole = role
+
 	resp, err := h.service.GetAll(c.Context(), req)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
