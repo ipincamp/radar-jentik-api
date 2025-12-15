@@ -50,33 +50,34 @@ func (tm *TokenManager) GenerateToken(userID, role string) (string, error) {
 }
 
 // ValidateToken memverifikasi token string dan mengembalikan ID pengguna (Subject) jika valid
-func (tm *TokenManager) ValidateToken(tokenString string) (string, error) {
+func (tm *TokenManager) ValidateToken(tokenString string) (string, string, error) {
 	var jsonToken paseto.JSONToken
 	var footer map[string]string
 
 	// 1. Decrypt token menggunakan Secret Key
 	if err := tm.paseto.Decrypt(tokenString, tm.secretKey, &jsonToken, &footer); err != nil {
-		return "", errors.New("token tidak valid")
+		return "", "", errors.New("token tidak valid")
 	}
 
 	// 2. Validasi Expiration
 	if time.Now().After(jsonToken.Expiration) {
-		return "", errors.New("token sudah kadaluarsa")
+		return "", "", errors.New("token sudah kadaluarsa")
 	}
 
 	// 3. Validasi Audience & Issuer (Opsional tapi direkomendasikan)
 	if jsonToken.Audience != tm.audience {
-		return "", errors.New("token audience tidak valid")
+		return "", "", errors.New("token audience tidak valid")
 	}
 	if jsonToken.Issuer != tm.issuer {
-		return "", errors.New("token issuer tidak valid")
+		return "", "", errors.New("token issuer tidak valid")
 	}
 
-	// 4. Ambil User ID (disimpan di field Subject saat Generate)
+	// 4. Ambil User ID dan Role (disimpan di field Subject saat Generate)
 	userID := jsonToken.Subject
+	role := footer["role"]
 	if userID == "" {
-		return "", errors.New("token tidak memiliki subject (user_id)")
+		return "", "", errors.New("token tidak memiliki subject (user_id)")
 	}
 
-	return userID, nil
+	return userID, role, nil
 }
