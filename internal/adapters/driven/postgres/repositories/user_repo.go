@@ -89,3 +89,17 @@ func (r *UserRepo) FindByUsername(ctx context.Context, username string) (*domain
 	// Konversi balik ke Domain agar Core tidak tahu tentang GORM
 	return userDB.ToDomain(), nil
 }
+
+func (r *UserRepo) FindAll(ctx context.Context) ([]*domain.User, error) {
+	var usersDB []User
+	// Kecualikan password
+	if err := r.db.WithContext(ctx).Omit("password").Find(&usersDB).Error; err != nil {
+		return nil, err
+	}
+
+	users := make([]*domain.User, len(usersDB))
+	for i, u := range usersDB {
+		users[i] = u.ToDomain()
+	}
+	return users, nil
+}
