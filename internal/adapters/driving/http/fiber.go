@@ -67,6 +67,7 @@ func (s *Server) setupRoutes() {
 	reports := api.Group("/reports", middleware.Protected(s.config))
 	reports.Post("/", s.reportHandler.Create)
 	reports.Get("/", s.reportHandler.GetAll)
+	reports.Get("/heatmap", s.reportHandler.GetHeatmap)
 	reports.Patch("/:id/validate", s.reportHandler.Validate)
 
 	// Area Routes (GeoJSON)

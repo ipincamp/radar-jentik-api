@@ -91,3 +91,32 @@ func (h *ReportHandler) Validate(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"message": "Status laporan berhasil diperbarui"})
 }
+
+func (h *ReportHandler) GetHeatmap(c *fiber.Ctx) error {
+	// 1. Parsing Query Parameters dengan Default Value
+	// "p" = Power Parameter (Default 2.0)
+	// "res" = Grid Resolution (Default 0.005 derajat)
+	req := ports.GetHeatmapRequest{
+		PowerParameter: c.QueryFloat("p", 2.0),
+		GridResolution: c.QueryFloat("res", 0.005),
+	}
+
+	// 2. Panggil Service
+	heatmapPoints, err := h.service.GetHeatmapData(c.Context(), req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Gagal mengkalkulasi heatmap: " + err.Error(),
+		})
+	}
+
+	// 3. Return Response (JSON Array of Points)
+	// Format ini mudah dikonsumsi library peta di Mobile (Google Maps / Mapbox)
+	return c.JSON(fiber.Map{
+		"meta": fiber.Map{
+			"power_parameter": req.PowerParameter,
+			"grid_resolution": req.GridResolution,
+			"total_points":    len(heatmapPoints),
+		},
+		"data": heatmapPoints,
+	})
+}
