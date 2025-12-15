@@ -10,12 +10,14 @@ import (
 type UserRepository interface {
 	Save(ctx context.Context, user *domain.User) error
 	FindByUsername(ctx context.Context, username string) (*domain.User, error)
+	FindAll(ctx context.Context) ([]*domain.User, error)
 }
 
 // Driving Port (Ke Handler/API)
 type AuthService interface {
 	Register(ctx context.Context, req RegisterRequest) error
 	Login(ctx context.Context, req LoginRequest) (string, error) // Return Token
+	GetAllUsers(ctx context.Context) ([]*domain.User, error)
 }
 
 // DTO (Data Transfer Object) untuk input
