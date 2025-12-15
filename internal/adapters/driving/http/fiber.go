@@ -62,6 +62,7 @@ func (s *Server) setupRoutes() {
 	auth.Post("/register", s.authHandler.Register)
 	auth.Post("/login", s.authHandler.Login)
 	auth.Post("/logout", middleware.Protected(s.config), s.authHandler.Logout)
+	auth.Get("/users", middleware.Protected(s.config), s.authHandler.ListUsers)
 
 	// Report Routes (Protected)
 	reports := api.Group("/reports", middleware.Protected(s.config))
