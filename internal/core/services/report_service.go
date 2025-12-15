@@ -78,7 +78,17 @@ func (s *ReportService) GetAll(ctx context.Context, req ports.FindReportsRequest
 		req.Limit = 100
 	}
 
-	reports, total, err := s.repo.FindAll(ctx, req.Page, req.Limit)
+	// LOGIKA RBAC DATA SCOPING
+	var filterUserID *string
+
+	// Jika role KADER, paksa filter berdasarkan ID-nya sendiri
+	if req.RequestorRole == "kader" {
+		filterUserID = &req.RequestorID
+	}
+	// Jika role PETUGAS (atau admin), filterUserID tetap nil (lihat semua)
+
+	// Panggil Repo dengan filter
+	reports, total, err := s.repo.FindAll(ctx, req.Page, req.Limit, filterUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +136,7 @@ func (s *ReportService) GetHeatmapData(ctx context.Context, req ports.GetHeatmap
 
 	// 2. Ambil SEMUA data laporan dengan status 'verified'
 	// Catatan: Untuk MVP masih ambil sampel data cukup banyak, misal limit 1000
-	reports, _, err := s.repo.FindAll(ctx, 1, 1000)
+	reports, _, err := s.repo.FindAll(ctx, 1, 1000, nil)
 	if err != nil {
 		return nil, err
 	}
