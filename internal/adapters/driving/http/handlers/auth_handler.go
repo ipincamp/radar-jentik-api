@@ -75,3 +75,21 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	// Karena stateless, logout hanyalah instruksi ke frontend untuk hapus token
 	return c.JSON(fiber.Map{"message": "Logout berhasil"})
 }
+
+func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
+	// 1. Cek Role (RBAC ACCESS CONTROL)
+	role, _ := c.Locals("role").(string)
+	if role != "petugas" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Akses ditolak. Hanya petugas yang boleh melihat data pengguna.",
+		})
+	}
+
+	// 2. Panggil Service
+	users, err := h.service.GetAllUsers(c.Context())
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"data": users})
+}
