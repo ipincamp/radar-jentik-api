@@ -1,0 +1,40 @@
+package migrations
+
+import (
+	"time"
+
+	"github.com/go-gormigrate/gormigrate/v2"
+	"gorm.io/gorm"
+)
+
+func CreateNAMATABEL() *gormigrate.Migration {
+	// Struct lokal untuk definisi tabel
+	type NamaEntity struct {
+		// ID UUID
+		ID string `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+
+		// Columns...
+		Name string `gorm:"type:varchar(100)"`
+
+		// Standard Timestamps (Timestamptz)
+		CreatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+		UpdatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+		DeletedAt gorm.DeletedAt `gorm:"type:timestamptz;index"`
+	}
+
+	return &gormigrate.Migration{
+		ID: "YYYYMMDDHHMMSS", // Ganti dengan timestamp saat ini
+
+		Migrate: func(tx *gorm.DB) error {
+			// Pastikan extension aktif (opsional jika sudah aktif di migrasi awal, tapi aman untuk defensif)
+			if err := tx.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
+				return err
+			}
+			return tx.AutoMigrate(&NamaEntity{})
+		},
+
+		Rollback: func(tx *gorm.DB) error {
+			return tx.Migrator().DropTable(&NamaEntity{})
+		},
+	}
+}

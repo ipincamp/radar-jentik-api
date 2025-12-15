@@ -1,0 +1,92 @@
+package http
+
+import (
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/handlers"
+	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/middleware"
+	"github.com/ipincamp/radar-jentik-api/pkg/config"
+)
+
+// Server struct bertindak sebagai Driving Adapter untuk HTTP
+type Server struct {
+	app           *fiber.App
+	config        *config.Config
+	authHandler   *handlers.AuthHandler
+	reportHandler *handlers.ReportHandler
+	areaHandler   *handlers.AreaHandler
+}
+
+// NewServer menginisialisasi Fiber beserta middleware dasarnya
+func NewServer(
+	cfg *config.Config,
+	authH *handlers.AuthHandler,
+	reportH *handlers.ReportHandler,
+	areaH *handlers.AreaHandler,
+) *Server {
+	app := fiber.New(fiber.Config{
+		AppName: "Radar Jentik API",
+		// Prefork: true, // Bisa diaktifkan nanti untuk Production performance
+	})
+
+	// Middleware Standar
+	app.Use(recover.New()) // Mencegah crash panic mematikan server
+	app.Use(logger.New())  // Logging request masuk
+	app.Use(cors.New())    // Mengizinkan akses dari Frontend/Mobile
+
+	server := &Server{
+		app:           app,
+		config:        cfg,
+		authHandler:   authH,
+		reportHandler: reportH,
+		areaHandler:   areaH,
+	}
+
+	// Setup Routes
+	server.setupRoutes()
+
+	return server
+}
+
+// setupRoutes mendaftarkan semua endpoint
+func (s *Server) setupRoutes() {
+	api := s.app.Group("/api/v1")
+
+	// Health Check Endpoint
+	api.Get("/health", s.healthCheck)
+
+	// Auth Routes
+	auth := api.Group("/auth")
+	auth.Post("/register", s.authHandler.Register)
+	auth.Post("/login", s.authHandler.Login)
+	auth.Post("/logout", middleware.Protected(s.config), s.authHandler.Logout)
+	auth.Get("/users", middleware.Protected(s.config), s.authHandler.ListUsers)
+
+	// Report Routes (Protected)
+	reports := api.Group("/reports", middleware.Protected(s.config))
+	reports.Post("/", s.reportHandler.Create)
+	reports.Get("/", s.reportHandler.GetAll)
+	reports.Get("/heatmap", s.reportHandler.GetHeatmap)
+	reports.Patch("/:id/validate", s.reportHandler.Validate)
+
+	// Area Routes (GeoJSON)
+	api.Get("/areas", middleware.Protected(s.config), s.areaHandler.GetAll)
+}
+
+// healthCheck handler (bisa dipisah ke file handler sendiri jika logika membesar)
+func (s *Server) healthCheck(c *fiber.Ctx) error {
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":      "ok",
+		"message":     "Service is running smoothly",
+		"environment": s.config.AppEnv,
+		"version":     "1.0.0",
+	})
+}
+
+// Run menjalankan server pada port yang ditentukan di config
+func (s *Server) Run() error {
+	// Menggunakan AppPort dari godotenv.go (misal: ":3000")
+	return s.app.Listen(s.config.AppPort)
+}
