@@ -21,8 +21,10 @@ type ValidateReportRequest struct {
 
 // Struct untuk parameter Pagination
 type FindReportsRequest struct {
-	Page  int `query:"page"`
-	Limit int `query:"limit"`
+	Page          int    `query:"page"`
+	Limit         int    `query:"limit"`
+	RequestorID   string `json:"-"` // Diisi oleh Handler (Internal)
+	RequestorRole string `json:"-"` // Diisi oleh Handler (Internal)
 }
 
 // Request untuk generate heatmap
@@ -48,7 +50,7 @@ type HeatmapPoint struct {
 
 type ReportRepository interface {
 	Save(ctx context.Context, report *domain.Report) error
-	FindAll(ctx context.Context, page, limit int) ([]*domain.Report, int64, error)
+	FindAll(ctx context.Context, page, limit int, filterUserID *string) ([]*domain.Report, int64, error)
 	FindByID(ctx context.Context, id string) (*domain.Report, error)
 	Update(ctx context.Context, report *domain.Report) error
 }
