@@ -11,6 +11,9 @@ func GetMigrations() []*gormigrate.Migration {
 		CreateUsersTable(),
 		CreateReportsTable(),
 		CreateAreasTable(),
+		CreateVillages(),
+		CreateInspectionReports(),
+		CreateContainerDetails(),
 		// Migrasi baru...
 	}
 }
