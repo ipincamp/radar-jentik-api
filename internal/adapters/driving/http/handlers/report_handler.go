@@ -11,6 +11,12 @@ type ReportHandler struct {
 	validator *validator.Validate
 }
 
+type ContainerDetailReq struct {
+	ContainerType  string `json:"container_type" validate:"required"`
+	InspectedCount int    `json:"inspected_count" validate:"required,min=0"`
+	PositiveCount  int    `json:"positive_count" validate:"required,min=0,ltefield=InspectedCount"`
+}
+
 func NewReportHandler(s ports.ReportService) *ReportHandler {
 	return &ReportHandler{
 		service:   s,
@@ -126,4 +132,16 @@ func (h *ReportHandler) GetHeatmap(c *fiber.Ctx) error {
 		},
 		"data": heatmapPoints,
 	})
+}
+
+type CreateReportRequest struct {
+	VillageID      int64   `json:"village_id" validate:"required"`
+	RT             string  `json:"rt" validate:"required"`
+	RW             string  `json:"rw" validate:"required"`
+	FamilyHeadName string  `json:"family_head_name"`
+	Latitude       float64 `json:"latitude" validate:"required"`
+	Longitude      float64 `json:"longitude" validate:"required"`
+	LarvaeStatus   int     `json:"larvae_status" validate:"required,oneof=0 1"`
+	// Array untuk menerima data wadah
+	ContainerDetails []ContainerDetailReq `json:"container_details" validate:"required,dive"`
 }
