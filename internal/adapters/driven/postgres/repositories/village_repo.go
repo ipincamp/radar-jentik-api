@@ -35,3 +35,11 @@ func (r *villageRepository) FindByID(ctx context.Context, id string) (*domain.Vi
 	}
 	return &village, nil
 }
+
+func (r *villageRepository) Create(ctx context.Context, village *domain.Village) error {
+	// GORM akan otomatis men-generate UUID untuk ID desa dan mengisi CreatedAt/UpdatedAt
+	if err := r.db.WithContext(ctx).Create(village).Error; err != nil {
+		return err
+	}
+	return nil
+}

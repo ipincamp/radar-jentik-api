@@ -24,22 +24,19 @@ type GeoJSONFeatureCollection struct {
 type GeoJSONFeature struct {
 	Type       string                 `json:"type"`
 	Properties map[string]interface{} `json:"properties"`
-	// Gunakan json.RawMessage agar Geometry tetap berupa string JSON mentah
-	// karena ST_GeomFromGeoJSON di PostGIS membutuhkan format JSON utuh.
-	Geometry json.RawMessage `json:"geometry"`
+	// Kita tidak lagi mem-parsing Geometry karena ERD baru hanya menyimpan Nama Desa
 }
 
 func main() {
 	// 1. Parsing Arguments
 	filePath := flag.String("file", "", "Path ke file GeoJSON (wajib)")
-	areaType := flag.String("type", "desa", "Tipe area (contoh: desa, rw, kecamatan)")
 	flag.Parse()
 
 	if *filePath == "" {
-		log.Fatal("Harap sertakan path file: go run cmd/seeder/main.go -file=desa_panusupan.txt")
+		log.Fatal("Harap sertakan path file: go run cmd/seeder/main.go -file=desa_kasegeran.json")
 	}
 
-	// 2. Load Config & Database
+	// 2. Load Config & Connect DB
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Gagal load config: %v", err)
@@ -50,8 +47,8 @@ func main() {
 		log.Fatalf("Gagal koneksi database: %v", err)
 	}
 
-	// 3. Init Repository
-	areaRepo := repositories.NewAreaRepo(db)
+	// 3. Init Village Repository yang baru
+	villageRepo := repositories.NewVillageRepository(db)
 
 	// 4. Baca File GeoJSON
 	log.Printf("Membaca file: %s...", *filePath)
@@ -66,7 +63,7 @@ func main() {
 		log.Fatalf("Gagal parsing JSON: %v", err)
 	}
 
-	log.Printf("Ditemukan %d fitur area. Memulai import...", len(fc.Features))
+	log.Printf("Ditemukan %d fitur desa. Memulai import...", len(fc.Features))
 
 	// 6. Loop dan Simpan ke DB
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -74,31 +71,26 @@ func main() {
 
 	successCount := 0
 	for _, f := range fc.Features {
-		// Ambil Nama dari Properties (sesuaikan dengan key di file Anda: "nm_kelurahan")
+		// Ambil Nama dari Properties (Sesuaikan "nm_kelurahan" dengan key asli di file GeoJSON Anda)
 		nameIntf, ok := f.Properties["nm_kelurahan"]
-		name := "Unknown Area"
+		name := "Desa Tidak Diketahui"
 		if ok {
 			name = fmt.Sprintf("%v", nameIntf)
 		}
 
-		// Konversi Geometry JSON ke String
-		geomString := string(f.Geometry)
-
-		// Buat Domain Object
-		newArea := &domain.Area{
+		// Buat Domain Object Village
+		newVillage := &domain.Village{
 			Name: name,
-			Type: *areaType,
 		}
 
 		// Simpan via Repository
-		// Repository akan membungkus geomString dengan ST_GeomFromGeoJSON
-		if err := areaRepo.Save(ctx, newArea, geomString); err != nil {
-			log.Printf("[ERROR] Gagal menyimpan area '%s': %v", name, err)
+		if err := villageRepo.Create(ctx, newVillage); err != nil {
+			log.Printf("❌ Gagal menyimpan %s: %v", name, err)
 		} else {
-			log.Printf("[SUCCESS] Berhasil import: %s", name)
+			log.Printf("✅ Berhasil menyimpan desa: %s (ID: %s)", newVillage.Name, newVillage.ID)
 			successCount++
 		}
 	}
 
-	log.Printf("Selesai! %d/%d data berhasil diimport.", successCount, len(fc.Features))
+	log.Printf("🎉 Import selesai! %d/%d desa berhasil ditambahkan ke database.", successCount, len(fc.Features))
 }

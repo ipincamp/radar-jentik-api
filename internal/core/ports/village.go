@@ -9,6 +9,7 @@ import (
 type VillageRepository interface {
 	FindAll(ctx context.Context) ([]domain.Village, error)
 	FindByID(ctx context.Context, id string) (*domain.Village, error)
+	Create(ctx context.Context, village *domain.Village) error
 }
 
 type VillageService interface {
