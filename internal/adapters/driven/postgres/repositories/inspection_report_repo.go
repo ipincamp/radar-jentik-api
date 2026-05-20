@@ -44,3 +44,31 @@ func (r *inspectionReportRepository) Create(ctx context.Context, report *domain.
 
 	return err
 }
+
+// Ambil riwayat laporan milik kader tertentu
+func (r *inspectionReportRepository) GetByUserID(ctx context.Context, userID string) ([]domain.InspectionReport, error) {
+	var reports []domain.InspectionReport
+	// Preload digunakan untuk mengambil data wadah (anak) sekaligus
+	err := r.db.WithContext(ctx).Preload("ContainerDetails").Where("user_id = ?", userID).Order("inspected_at desc").Find(&reports).Error
+	return reports, err
+}
+
+// Ambil semua laporan yang menunggu validasi petugas
+func (r *inspectionReportRepository) GetPending(ctx context.Context) ([]domain.InspectionReport, error) {
+	var reports []domain.InspectionReport
+	err := r.db.WithContext(ctx).Preload("ContainerDetails").Where("validation_status = ?", "pending").Order("inspected_at asc").Find(&reports).Error
+	return reports, err
+}
+
+// Ubah status laporan (Terima/Tolak)
+func (r *inspectionReportRepository) UpdateStatus(ctx context.Context, id string, status string) error {
+	return r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("id = ?", id).Update("validation_status", status).Error
+}
+
+// Ambil data untuk Peta Zonasi IDW (Hanya yang berstatus 'accept')
+func (r *inspectionReportRepository) GetValidReports(ctx context.Context) ([]domain.InspectionReport, error) {
+	var reports []domain.InspectionReport
+	// Untuk peta, kita biasanya tidak butuh rincian container, cukup Lat, Long, dan LarvaeStatus
+	err := r.db.WithContext(ctx).Select("id, latitude, longitude, larvae_status, inspected_at").Where("validation_status = ?", "accept").Find(&reports).Error
+	return reports, err
+}

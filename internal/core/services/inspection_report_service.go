@@ -34,3 +34,23 @@ func (s *inspectionReportService) CreateReport(ctx context.Context, report *doma
 
 	return nil
 }
+
+func (s *inspectionReportService) GetCadreHistory(ctx context.Context, userID string) ([]domain.InspectionReport, error) {
+	return s.repo.GetByUserID(ctx, userID)
+}
+
+func (s *inspectionReportService) GetPendingReports(ctx context.Context) ([]domain.InspectionReport, error) {
+	return s.repo.GetPending(ctx)
+}
+
+func (s *inspectionReportService) ValidateReport(ctx context.Context, id string, status string) error {
+	// Memastikan status yang masuk hanya 'accept' atau 'reject'
+	if status != "accept" && status != "reject" {
+		return context.DeadlineExceeded // atau buat custom error
+	}
+	return s.repo.UpdateStatus(ctx, id, status)
+}
+
+func (s *inspectionReportService) GetMapData(ctx context.Context) ([]domain.InspectionReport, error) {
+	return s.repo.GetValidReports(ctx)
+}
