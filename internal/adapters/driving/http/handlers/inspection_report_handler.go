@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
 )
@@ -53,13 +52,9 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 	}
 
 	// Mengambil ID Kader dari JWT Token
-	userToken := c.Locals("user").(*jwt.Token)
-	claims := userToken.Claims.(jwt.MapClaims)
-
-	// Gunakan type assertion yang aman
-	userID, ok := claims["user_id"].(string)
+	userID, ok := c.Locals("user_id").(string)
 	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak ditemukan dalam token"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak valid atau tidak ditemukan"})
 	}
 
 	// Konversi Boolean (Flutter) ke Integer (PostgreSQL)
@@ -107,12 +102,9 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 // 2. Fungsi GetHistory (Untuk Halaman Riwayat Kader)
 // ---------------------------------------------------------
 func (h *InspectionReportHandler) GetHistory(c *fiber.Ctx) error {
-	userToken := c.Locals("user").(*jwt.Token)
-	claims := userToken.Claims.(jwt.MapClaims)
-
-	userID, ok := claims["user_id"].(string)
+	userID, ok := c.Locals("user_id").(string)
 	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak ditemukan dalam token"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak valid atau tidak ditemukan"})
 	}
 
 	reports, err := h.service.GetCadreHistory(c.Context(), userID)

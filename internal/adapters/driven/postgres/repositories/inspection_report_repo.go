@@ -31,9 +31,9 @@ func (r *inspectionReportRepository) Create(ctx context.Context, report *domain.
 
 		// 2. Update kolom 'geom' menggunakan fungsi spasial PostGIS ST_SetSRID dan ST_MakePoint.
 		//    Bujur (Longitude) adalah X, Lintang (Latitude) adalah Y.
-		geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?, ?), 4326)", report.Longitude, report.Latitude)
+		geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?::float, ?::float), 4326)", report.Longitude, report.Latitude)
 
-		if err := tx.Model(report).UpdateColumn("geom", geomExpr).Error; err != nil {
+		if err := tx.Model(report).Update("geom", geomExpr).Error; err != nil {
 			// Jika gagal update spasial, transaksi otomatis di-rollback
 			return err
 		}

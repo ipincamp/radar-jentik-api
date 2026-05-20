@@ -16,16 +16,15 @@ type InspectionReport struct {
 	Latitude       float64 `gorm:"type:decimal(10,8);not null" json:"latitude"`
 	Longitude      float64 `gorm:"type:decimal(11,8);not null" json:"longitude"`
 
-	// Tipe Spasial PostGIS untuk IDW
-	Geom string `gorm:"type:geometry(Point,4326)" json:"-"`
+	// Gunakan gorm:"-" agar GORM tidak mencoba melakukan SELECT/SCAN pada kolom biner geom ini
+	Geom string `gorm:"-" json:"-"`
 
-	LarvaeStatus     int       `gorm:"type:int;not null" json:"larvae_status"`                      // 0: negative, 1: positive
-	ValidationStatus string    `gorm:"type:varchar(20);default:'pending'" json:"validation_status"` // pending, accept, reject
-	InspectedAt      time.Time `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"inspected_at"`
-
-	CreatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	LarvaeStatus     int            `gorm:"type:int;not null" json:"larvae_status"`
+	ValidationStatus string         `gorm:"type:varchar(20);default:'pending'" json:"validation_status"`
+	InspectedAt      time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"inspected_at"`
+	CreatedAt        time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt        time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relasi
 	User             *User             `gorm:"foreignKey:UserID" json:"user,omitempty"`
