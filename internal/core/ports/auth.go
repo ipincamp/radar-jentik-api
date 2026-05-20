@@ -6,28 +6,14 @@ import (
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 )
 
-// Driven Port (Ke Database)
 type UserRepository interface {
 	Save(ctx context.Context, user *domain.User) error
 	FindByUsername(ctx context.Context, username string) (*domain.User, error)
-	FindAll(ctx context.Context) ([]*domain.User, error)
+	FindAll(ctx context.Context) ([]*domain.User, error) // Pastikan ini ada
 }
 
-// Driving Port (Ke Handler/API)
 type AuthService interface {
-	Register(ctx context.Context, req RegisterRequest) error
-	Login(ctx context.Context, req LoginRequest) (string, error) // Return Token
-	GetAllUsers(ctx context.Context) ([]*domain.User, error)
-}
-
-// DTO (Data Transfer Object) untuk input
-type RegisterRequest struct {
-	Name     string
-	Username string
-	Password string
-}
-
-type LoginRequest struct {
-	Username string
-	Password string
+	Register(ctx context.Context, user *domain.User) error
+	Login(ctx context.Context, username, password string) (string, error)
+	GetAllUsers(ctx context.Context) ([]*domain.User, error) // TAMBAHKAN INI
 }
