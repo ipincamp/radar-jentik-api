@@ -152,7 +152,17 @@ func (h *InspectionReportHandler) ValidateReport(c *fiber.Ctx) error {
 // 5. Fungsi GetMapData (Untuk Halaman Peta IDW)
 // ---------------------------------------------------------
 func (h *InspectionReportHandler) GetMapData(c *fiber.Ctx) error {
-	reports, err := h.service.GetMapData(c.Context())
+
+	// Ambil User ID dan Role dari Locals (hasil ekstraksi Middleware)
+	userID, ok1 := c.Locals("user_id").(string)
+	role, ok2 := c.Locals("role").(string)
+
+	if !ok1 || !ok2 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid, harap login ulang"})
+	}
+
+	// Masukkan userID dan role ke dalam pemanggilan Service
+	reports, err := h.service.GetMapData(c.Context(), userID, role)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil data peta spasial"})
 	}

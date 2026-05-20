@@ -66,9 +66,21 @@ func (r *inspectionReportRepository) UpdateStatus(ctx context.Context, id string
 }
 
 // Ambil data untuk Peta Zonasi IDW (Hanya yang berstatus 'accept')
-func (r *inspectionReportRepository) GetValidReports(ctx context.Context) ([]domain.InspectionReport, error) {
+func (r *inspectionReportRepository) GetValidReports(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error) {
 	var reports []domain.InspectionReport
-	// Untuk peta, kita biasanya tidak butuh rincian container, cukup Lat, Long, dan LarvaeStatus
-	err := r.db.WithContext(ctx).Select("id, latitude, longitude, larvae_status, inspected_at").Where("validation_status = ?", "accept").Find(&reports).Error
+
+	// Query dasar: Hanya ambil laporan yang sudah divalidasi (accept)
+	query := r.db.WithContext(ctx).Where("validation_status = ?", "accept")
+
+	// RESTRIKSI LINGKUP (ISOLASI DATA)
+	if role == "cadre" {
+		// Jika dia kader, filter laporan yang village_id-nya sama dengan village_id milik kader tersebut
+		query = query.Where("village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
+	}
+	// Jika role == "officer" (Petugas Puskesmas), kita tidak menambahkan Where village_id,
+	// sehingga petugas bisa melihat SEMUA titik laporan di semua desa.
+
+	err := query.Order("inspected_at desc").Find(&reports).Error
+
 	return reports, err
 }

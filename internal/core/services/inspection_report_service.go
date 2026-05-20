@@ -51,6 +51,7 @@ func (s *inspectionReportService) ValidateReport(ctx context.Context, id string,
 	return s.repo.UpdateStatus(ctx, id, status)
 }
 
-func (s *inspectionReportService) GetMapData(ctx context.Context) ([]domain.InspectionReport, error) {
-	return s.repo.GetValidReports(ctx)
+func (s *inspectionReportService) GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error) {
+	// Teruskan parameter userID dan role ke Repository
+	return s.repo.GetValidReports(ctx, userID, role)
 }

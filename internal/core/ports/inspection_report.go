@@ -11,7 +11,7 @@ type InspectionReportRepository interface {
 	GetByUserID(ctx context.Context, userID string) ([]domain.InspectionReport, error)
 	GetPending(ctx context.Context) ([]domain.InspectionReport, error)
 	UpdateStatus(ctx context.Context, id string, status string) error
-	GetValidReports(ctx context.Context) ([]domain.InspectionReport, error) // Untuk Peta IDW
+	GetValidReports(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
 }
 
 type InspectionReportService interface {
@@ -19,5 +19,5 @@ type InspectionReportService interface {
 	GetCadreHistory(ctx context.Context, userID string) ([]domain.InspectionReport, error)
 	GetPendingReports(ctx context.Context) ([]domain.InspectionReport, error)
 	ValidateReport(ctx context.Context, id string, status string) error
-	GetMapData(ctx context.Context) ([]domain.InspectionReport, error)
+	GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
 }
