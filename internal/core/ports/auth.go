@@ -9,11 +9,11 @@ import (
 type UserRepository interface {
 	Save(ctx context.Context, user *domain.User) error
 	FindByUsername(ctx context.Context, username string) (*domain.User, error)
-	FindAll(ctx context.Context) ([]*domain.User, error) // Pastikan ini ada
+	FindAll(ctx context.Context) ([]*domain.User, error)
 }
 
 type AuthService interface {
 	Register(ctx context.Context, user *domain.User) error
-	Login(ctx context.Context, username, password string) (string, error)
-	GetAllUsers(ctx context.Context) ([]*domain.User, error) // TAMBAHKAN INI
+	Login(ctx context.Context, username, password string) (string, string, error)
+	GetAllUsers(ctx context.Context) ([]*domain.User, error)
 }

@@ -74,7 +74,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	token, err := h.authService.Login(c.Context(), req.Username, req.Password)
+	token, role, err := h.authService.Login(c.Context(), req.Username, req.Password)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Username atau password salah",
@@ -84,6 +84,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Login berhasil",
 		"token":   token,
+		"role":    role,
 	})
 }
 

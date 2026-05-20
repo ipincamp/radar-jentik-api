@@ -47,32 +47,32 @@ func (s *authService) Register(ctx context.Context, user *domain.User) error {
 }
 
 // Login sudah diperbarui untuk menerima username & password string secara langsung
-func (s *authService) Login(ctx context.Context, username, password string) (string, error) {
-	// 1. Cari User
+func (s *authService) Login(ctx context.Context, username, password string) (string, string, error) {
+	// 1. Cari User berdasarkan username
 	user, err := s.userRepo.FindByUsername(ctx, username)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if user == nil {
-		return "", errors.New("username atau password salah")
+		return "", "", errors.New("username atau password salah")
 	}
 
 	// 2. Verifikasi Password
 	match, err := argon2id.ComparePasswordAndHash(password, user.Password)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !match {
-		return "", errors.New("username atau password salah")
+		return "", "", errors.New("username atau password salah")
 	}
 
 	// 3. Generate Token dengan membawa ID dan Role
 	token, err := s.tokenManager.GenerateToken(user.ID, user.Role)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return token, nil
+	return token, user.Role, nil // Return token beserta role-nya
 }
 
 // GetAllUsers untuk memenuhi kebutuhan fitur Manajemen Kader
