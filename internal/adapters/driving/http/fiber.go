@@ -18,6 +18,7 @@ type Server struct {
 	config                  *config.Config
 	authHandler             *handlers.AuthHandler
 	inspectionReportHandler *handlers.InspectionReportHandler
+	villageHandler          *handlers.VillageHandler
 }
 
 // NewServer menginisialisasi Fiber beserta middleware dasarnya
@@ -25,6 +26,7 @@ func NewServer(
 	cfg *config.Config,
 	authH *handlers.AuthHandler,
 	inspectionReportH *handlers.InspectionReportHandler,
+	villageH *handlers.VillageHandler,
 ) *Server {
 	app := fiber.New(fiber.Config{
 		AppName: "Radar Jentik API",
@@ -32,15 +34,16 @@ func NewServer(
 	})
 
 	// Middleware Standar
-	app.Use(recover.New()) // Mencegah crash panic mematikan server
-	app.Use(logger.New())  // Logging request masuk
-	app.Use(cors.New())    // Mengizinkan CORS agar bisa diakses oleh Flutter Mobile/Web
+	app.Use(recover.New())
+	app.Use(logger.New())
+	app.Use(cors.New())
 
 	server := &Server{
 		app:                     app,
 		config:                  cfg,
 		authHandler:             authH,
 		inspectionReportHandler: inspectionReportH,
+		villageHandler:          villageH,
 	}
 
 	// Setup Routes
@@ -61,21 +64,24 @@ func (s *Server) setupRoutes() {
 	auth.Post("/register", s.authHandler.Register)
 	auth.Post("/login", s.authHandler.Login)
 	auth.Post("/logout", middleware.Protected(s.config), s.authHandler.Logout)
-	auth.Get("/users", middleware.Protected(s.config), s.authHandler.ListUsers) // Manajemen Kader oleh Petugas
+	auth.Get("/users", middleware.Protected(s.config), s.authHandler.ListUsers)
+
+	// Master Data Desa (Dibuat public agar bisa diakses saat dropdown registrasi di Flutter)
+	api.Get("/villages", s.villageHandler.GetAll)
 
 	// Inspection Report Routes (Protected - Wajib membawa Bearer Token JWT)
 	reports := api.Group("/reports", middleware.Protected(s.config))
 
 	// Rute untuk peran Kader
-	reports.Post("/", s.inspectionReportHandler.Create)           // Halaman Form Lapor (Kader)
-	reports.Get("/history", s.inspectionReportHandler.GetHistory) // Halaman Riwayat Laporan (Kader)
+	reports.Post("/", s.inspectionReportHandler.Create)
+	reports.Get("/history", s.inspectionReportHandler.GetHistory)
 
 	// Rute untuk peran Petugas Puskesmas
-	reports.Get("/pending", s.inspectionReportHandler.GetPending)          // Halaman Daftar Validasi (Petugas)
-	reports.Put("/:id/validate", s.inspectionReportHandler.ValidateReport) // Tombol Aksi Terima/Tolak (Petugas)
+	reports.Get("/pending", s.inspectionReportHandler.GetPending)
+	reports.Put("/:id/validate", s.inspectionReportHandler.ValidateReport)
 
 	// Rute Gabungan untuk Peta Spasial IDW
-	reports.Get("/map", s.inspectionReportHandler.GetMapData) // Halaman Peta Zonasi (Kader & Petugas)
+	reports.Get("/map", s.inspectionReportHandler.GetMapData)
 }
 
 // healthCheck handler untuk memastikan server berjalan dengan baik
@@ -86,15 +92,12 @@ func (s *Server) healthCheck(c *fiber.Ctx) error {
 	})
 }
 
-// Start menjalankan server HTTP pada port yang ditentukan di .env
+// Start menjalankan server HTTP
 func (s *Server) Start(addr string) error {
 	return s.app.Listen(addr)
 }
 
 // Shutdown mematikan server secara aman (graceful shutdown)
 func (s *Server) Shutdown(ctx context.Context) error {
-	// Memanggil method ShutdownWithContext dari underlying fiber.App
-	// Ini akan memastikan server menyelesaikan request yang sedang berjalan
-	// sebelum benar-benar mati, sesuai context timeout yang di-set di main.go
 	return s.app.ShutdownWithContext(ctx)
 }

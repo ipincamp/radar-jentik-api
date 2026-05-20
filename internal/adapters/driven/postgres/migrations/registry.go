@@ -9,11 +9,8 @@ import (
 func GetMigrations() []*gormigrate.Migration {
 	return []*gormigrate.Migration{
 		CreateUsersTable(),
-		CreateReportsTable(),
-		CreateAreasTable(),
 		CreateVillages(),
 		CreateInspectionReports(),
 		CreateContainerDetails(),
-		// Migrasi baru...
 	}
 }

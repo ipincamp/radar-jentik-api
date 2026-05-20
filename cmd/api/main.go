@@ -23,44 +23,42 @@ func main() {
 	// 1. Load Konfigurasi
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		// Log fatal akan menghentikan aplikasi jika config gagal
 		log.Fatalf("Gagal memuat konfigurasi: %v", err)
 	}
-	// Tampilkan info (hanya untuk debug)
 	log.Printf("Aplikasi berjalan di environment: %s", cfg.AppEnv)
-	log.Printf("Database target: %s:%s/%s", cfg.DBHost, cfg.DBPort, cfg.DBName)
 
 	// 2. Inisialisasi Database (Driven Adapter)
 	db, err := postgres.NewConnection(cfg)
 	if err != nil {
 		log.Fatalf("Gagal terhubung ke database: %v", err)
 	}
-	// Cek koneksi database
+
 	sqlDB, _ := db.DB()
 	if err := sqlDB.Ping(); err != nil {
 		log.Fatalf("Database tidak merespon: %v", err)
-	} else {
-		log.Println("Berhasil terhubung ke database PostgreSQL")
 	}
+	log.Println("Berhasil terhubung ke database PostgreSQL")
 
 	// 3. Dependency Injection (DI) Container
-	// A. Init Token Manager (Auth Utility)
 	tokenManager := auth.NewTokenManager(cfg)
 
-	// B. Init Repository
+	// A. Init Repositories
 	userRepo := repositories.NewUserRepo(db)
 	inspectionReportRepo := repositories.NewInspectionReportRepository(db)
+	villageRepo := repositories.NewVillageRepository(db) // Daftarkan repo desa
 
-	// C. Init Service (Inject Repo & TokenManager)
+	// B. Init Services
 	authService := services.NewAuthService(userRepo, tokenManager)
 	inspectionReportService := services.NewInspectionReportService(inspectionReportRepo)
+	villageService := services.NewVillageService(villageRepo) // Daftarkan service desa
 
-	// D. Init Handler
+	// C. Init Handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	inspectionReportHandler := handlers.NewInspectionReportHandler(inspectionReportService)
+	villageHandler := handlers.NewVillageHandler(villageService) // Daftarkan handler desa
 
-	// 4. Inisialisasi HTTP Adapter (Fiber)
-	server := internalHttp.NewServer(cfg, authHandler, inspectionReportHandler)
+	// 4. Inisialisasi HTTP Adapter (Fiber Server) dengan semua handler lengkap
+	server := internalHttp.NewServer(cfg, authHandler, inspectionReportHandler, villageHandler)
 
 	// Channel untuk menangkap signal interrupt (seperti Ctrl+C)
 	quit := make(chan os.Signal, 1)
@@ -79,13 +77,12 @@ func main() {
 	<-quit
 	log.Printf("Shutting down server gracefully...")
 
-	// Konteks untuk shutdown dengan timeout (misal 10 detik)
-	// Agar server tidak langsung mati dan bisa menyelesaikan request yang sedang berjalan
+	// Konteks untuk shutdown dengan timeout (10 detik)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		log.Fatalf("Fatal error during server shutdown: %v", err)
 	}
 
-	log.Printf("Server exited properly")
+	log.Printf("Server stopped gracefully")
 }
