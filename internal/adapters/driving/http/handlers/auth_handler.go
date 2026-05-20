@@ -1,95 +1,113 @@
 package handlers
 
 import (
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
 )
 
 type AuthHandler struct {
-	service   ports.AuthService
-	validator *validator.Validate
+	authService ports.AuthService
 }
 
-func NewAuthHandler(s ports.AuthService) *AuthHandler {
-	return &AuthHandler{
-		service:   s,
-		validator: validator.New(),
-	}
+func NewAuthHandler(authService ports.AuthService) *AuthHandler {
+	return &AuthHandler{authService: authService}
 }
 
-// Struct khusus validasi input HTTP
-type RegisterInput struct {
-	Name     string `json:"name" validate:"required"`
-	Username string `json:"username" validate:"required"`
-	Password string `json:"password" validate:"required,min=6"`
+// DTO untuk Registrasi
+type RegisterRequest struct {
+	FullName  string `json:"full_name" validate:"required"`
+	Username  string `json:"username" validate:"required"`
+	Password  string `json:"password" validate:"required,min=6"`
+	Role      string `json:"role" validate:"required,oneof=cadre officer"`
+	VillageID string `json:"village_id" validate:"required"` // UUID Desa
 }
 
-type LoginInput struct {
+// DTO untuk Login
+type LoginRequest struct {
 	Username string `json:"username" validate:"required"`
 	Password string `json:"password" validate:"required"`
 }
 
+// Fungsi Register (Buat Akun)
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
-	var input RegisterInput
-	if err := c.BodyParser(&input); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid input"})
-	}
+	req := new(RegisterRequest)
 
-	if err := h.validator.Struct(input); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	req := ports.RegisterRequest{
-		Name: input.Name, Username: input.Username, Password: input.Password,
-	}
-
-	if err := h.service.Register(c.Context(), req); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	return c.Status(201).JSON(fiber.Map{"message": "Registrasi berhasil"})
-}
-
-func (h *AuthHandler) Login(c *fiber.Ctx) error {
-	var input LoginInput
-	if err := c.BodyParser(&input); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid input"})
-	}
-
-	if err := h.validator.Struct(input); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	token, err := h.service.Login(c.Context(), ports.LoginRequest{
-		Username: input.Username, Password: input.Password,
-	})
-	if err != nil {
-		return c.Status(401).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	return c.JSON(fiber.Map{"token": token})
-}
-
-func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-	// Karena stateless, logout hanyalah instruksi ke frontend untuk hapus token
-	return c.JSON(fiber.Map{"message": "Logout berhasil"})
-}
-
-func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
-	// 1. Cek Role (RBAC ACCESS CONTROL)
-	role, _ := c.Locals("role").(string)
-	if role != "petugas" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "Akses ditolak. Hanya petugas yang boleh melihat data pengguna.",
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "Format request tidak valid",
+			"details": err.Error(),
 		})
 	}
 
-	// 2. Panggil Service
-	users, err := h.service.GetAllUsers(c.Context())
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	user := &domain.User{
+		FullName:  req.FullName,
+		Username:  req.Username,
+		Password:  req.Password,
+		Role:      req.Role,
+		VillageID: req.VillageID,
 	}
 
-	return c.JSON(fiber.Map{"data": users})
+	if err := h.authService.Register(c.Context(), user); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Gagal mendaftarkan pengguna",
+			"details": err.Error(),
+		})
+	}
+
+	// Jangan kembalikan password di response
+	user.Password = ""
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "Registrasi akun berhasil",
+		"data":    user,
+	})
+}
+
+// Fungsi Login
+func (h *AuthHandler) Login(c *fiber.Ctx) error {
+	req := new(LoginRequest)
+
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Format request tidak valid",
+		})
+	}
+
+	token, err := h.authService.Login(c.Context(), req.Username, req.Password)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Username atau password salah",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Login berhasil",
+		"token":   token,
+	})
+}
+
+// Fungsi Logout
+func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	// Karena kita menggunakan JWT Stateless, logout biasanya dilakukan
+	// dengan cara menghapus token di sisi aplikasi Flutter.
+	// Endpoint ini hanya sebagai konfirmasi/formalitas.
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Logout berhasil",
+	})
+}
+
+// Fungsi List Users (Untuk halaman Manajemen Kader oleh Petugas)
+func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
+	// Pastikan fungsi GetAllUsers ada di auth_service.go Anda
+	users, err := h.authService.GetAllUsers(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Gagal mengambil data daftar kader",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"data": users,
+	})
 }

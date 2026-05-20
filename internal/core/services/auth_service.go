@@ -40,7 +40,7 @@ func (s *AuthService) Register(ctx context.Context, req ports.RegisterRequest) e
 
 	// 3. Simpan User
 	newUser := &domain.User{
-		Name:     req.Name,
+		FullName: req.Name,
 		Username: req.Username,
 		Password: hash,
 		Role:     "kader", // Default role

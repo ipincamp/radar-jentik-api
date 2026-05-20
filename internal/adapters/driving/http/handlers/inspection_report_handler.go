@@ -1,11 +1,10 @@
 package handlers
 
 import (
-	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
-	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
+	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
 )
 
 type InspectionReportHandler struct {
@@ -16,36 +15,60 @@ func NewInspectionReportHandler(service ports.InspectionReportService) *Inspecti
 	return &InspectionReportHandler{service: service}
 }
 
-// DTO untuk membaca JSON dari Flutter
+// ---------------------------------------------------------
+// DTO (Data Transfer Object) - Penyesuaian Request Body
+// ---------------------------------------------------------
+
 type CreateReportRequest struct {
-	VillageID      string               `json:"village_id" validate:"required"`
-	RT             string               `json:"rt" validate:"required"`
-	RW             string               `json:"rw" validate:"required"`
-	FamilyHeadName string               `json:"family_head_name"`
-	Latitude       float64              `json:"latitude" validate:"required"`
-	Longitude      float64              `json:"longitude" validate:"required"`
-	LarvaeStatus   int                  `json:"larvae_status" validate:"oneof=0 1"`
-	Containers     []ContainerDetailReq `json:"containers" validate:"required,dive"`
+	VillageID      string  `json:"village_id" validate:"required"`
+	RT             string  `json:"rt" validate:"required"`
+	RW             string  `json:"rw" validate:"required"`
+	FamilyHeadName string  `json:"family_head_name"`
+	Latitude       float64 `json:"latitude" validate:"required"`
+	Longitude      float64 `json:"longitude" validate:"required"`
+	// LarvaeStatus diubah menjadi BOOL agar cocok dengan nilai Switch (true/false) di Flutter
+	LarvaeStatus bool                 `json:"larvae_status"`
+	Containers   []ContainerDetailReq `json:"containers" validate:"required,dive"`
 }
 
 type ContainerDetailReq struct {
-	ContainerType  string `json:"container_type" validate:"required"`
-	InspectedCount int    `json:"inspected_count"`
-	PositiveCount  int    `json:"positive_count"`
+	ContainerType string `json:"container_type" validate:"required"`
+	// Tipe int sudah aman selama di Flutter Anda menggunakan int.parse(controller.text) saat mengirim JSON
+	InspectedCount int `json:"inspected_count"`
+	PositiveCount  int `json:"positive_count"`
 }
 
+// ---------------------------------------------------------
 // 1. Fungsi Create (Untuk Form Laporan Kader)
+// ---------------------------------------------------------
 func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 	req := new(CreateReportRequest)
 
+	// Parsing JSON Body
 	if err := c.BodyParser(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body", "details": err.Error()})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   "Format request tidak valid",
+			"details": err.Error(),
+		})
 	}
 
+	// Mengambil ID Kader dari JWT Token
 	userToken := c.Locals("user").(*jwt.Token)
 	claims := userToken.Claims.(jwt.MapClaims)
-	userID := claims["user_id"].(string)
 
+	// Gunakan type assertion yang aman
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak ditemukan dalam token"})
+	}
+
+	// Konversi Boolean (Flutter) ke Integer (PostgreSQL)
+	statusJentik := 0
+	if req.LarvaeStatus {
+		statusJentik = 1
+	}
+
+	// Mapping Request ke Domain Entity
 	report := &domain.InspectionReport{
 		UserID:         userID,
 		VillageID:      req.VillageID,
@@ -54,9 +77,10 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 		FamilyHeadName: req.FamilyHeadName,
 		Latitude:       req.Latitude,
 		Longitude:      req.Longitude,
-		LarvaeStatus:   req.LarvaeStatus,
+		LarvaeStatus:   statusJentik, // Memasukkan hasil konversi 1/0
 	}
 
+	// Mapping Container Details
 	for _, cReq := range req.Containers {
 		report.ContainerDetails = append(report.ContainerDetails, domain.ContainerDetail{
 			ContainerType:  cReq.ContainerType,
@@ -65,60 +89,81 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
+	// Simpan ke Database via Service
 	if err := h.service.CreateReport(c.Context(), report); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create report", "details": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Gagal menyimpan laporan",
+			"details": err.Error(),
+		})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Report successfully created",
+		"message": "Laporan berhasil dikirim",
 		"data":    report,
 	})
 }
 
+// ---------------------------------------------------------
 // 2. Fungsi GetHistory (Untuk Halaman Riwayat Kader)
+// ---------------------------------------------------------
 func (h *InspectionReportHandler) GetHistory(c *fiber.Ctx) error {
 	userToken := c.Locals("user").(*jwt.Token)
 	claims := userToken.Claims.(jwt.MapClaims)
-	userID := claims["user_id"].(string)
+
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak ditemukan dalam token"})
+	}
 
 	reports, err := h.service.GetCadreHistory(c.Context(), userID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil riwayat laporan"})
 	}
+
 	return c.JSON(fiber.Map{"data": reports})
 }
 
+// ---------------------------------------------------------
 // 3. Fungsi GetPending (Untuk Halaman Validasi Petugas)
+// ---------------------------------------------------------
 func (h *InspectionReportHandler) GetPending(c *fiber.Ctx) error {
 	reports, err := h.service.GetPendingReports(c.Context())
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil daftar laporan pending"})
 	}
+
 	return c.JSON(fiber.Map{"data": reports})
 }
 
+// ---------------------------------------------------------
 // 4. Fungsi ValidateReport (Untuk Tombol Terima/Tolak Petugas)
+// ---------------------------------------------------------
 func (h *InspectionReportHandler) ValidateReport(c *fiber.Ctx) error {
 	reportID := c.Params("id")
 
 	var req struct {
 		Status string `json:"status" validate:"required"`
 	}
+
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Status wajib diisi (accept/reject)"})
 	}
 
 	if err := h.service.ValidateReport(c.Context(), reportID, req.Status); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update validation status"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal memvalidasi laporan"})
 	}
-	return c.JSON(fiber.Map{"message": "Report validated successfully"})
+
+	return c.JSON(fiber.Map{"message": "Status laporan berhasil diperbarui"})
 }
 
+// ---------------------------------------------------------
 // 5. Fungsi GetMapData (Untuk Halaman Peta IDW)
+// ---------------------------------------------------------
 func (h *InspectionReportHandler) GetMapData(c *fiber.Ctx) error {
 	reports, err := h.service.GetMapData(c.Context())
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil data peta spasial"})
 	}
+
 	return c.JSON(fiber.Map{"data": reports})
 }

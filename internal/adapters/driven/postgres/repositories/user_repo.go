@@ -31,7 +31,7 @@ type User struct {
 func (u *User) ToDomain() *domain.User {
 	return &domain.User{
 		ID:        u.ID,
-		Name:      u.Name,
+		FullName:  u.Name,
 		Username:  u.Username,
 		Password:  u.Password,
 		Role:      u.Role,
@@ -44,7 +44,7 @@ func (u *User) ToDomain() *domain.User {
 func FromDomain(u *domain.User) *User {
 	return &User{
 		ID:       u.ID,
-		Name:     u.Name,
+		Name:     u.FullName,
 		Username: u.Username,
 		Password: u.Password,
 		Role:     u.Role,
