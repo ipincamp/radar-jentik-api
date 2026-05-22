@@ -73,7 +73,7 @@ func (s *Server) setupRoutes() {
 	api.Get("/villages", s.villageHandler.GetAll)
 
 	// Rute untuk menghitung IDW
-	api.Post("/estimations/idw", s.idwHandler.Calculate)
+	api.Post("/estimations/idw", middleware.Protected(s.config), s.idwHandler.Calculate)
 
 	// Inspection Report Routes (Protected - Wajib membawa Bearer Token JWT)
 	reports := api.Group("/reports", middleware.Protected(s.config))
