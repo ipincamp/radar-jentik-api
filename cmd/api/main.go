@@ -51,14 +51,16 @@ func main() {
 	authService := services.NewAuthService(userRepo, tokenManager)
 	inspectionReportService := services.NewInspectionReportService(inspectionReportRepo)
 	villageService := services.NewVillageService(villageRepo) // Daftarkan service desa
+	idwService := services.NewIDWService()
 
 	// C. Init Handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	inspectionReportHandler := handlers.NewInspectionReportHandler(inspectionReportService)
 	villageHandler := handlers.NewVillageHandler(villageService) // Daftarkan handler desa
+	idwHandler := handlers.NewIDWHandler(idwService)
 
 	// 4. Inisialisasi HTTP Adapter (Fiber Server) dengan semua handler lengkap
-	server := internalHttp.NewServer(cfg, authHandler, inspectionReportHandler, villageHandler)
+	server := internalHttp.NewServer(cfg, authHandler, inspectionReportHandler, villageHandler, idwHandler)
 
 	// Channel untuk menangkap signal interrupt (seperti Ctrl+C)
 	quit := make(chan os.Signal, 1)

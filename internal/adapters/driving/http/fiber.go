@@ -19,6 +19,7 @@ type Server struct {
 	authHandler             *handlers.AuthHandler
 	inspectionReportHandler *handlers.InspectionReportHandler
 	villageHandler          *handlers.VillageHandler
+	idwHandler              *handlers.IDWHandler
 }
 
 // NewServer menginisialisasi Fiber beserta middleware dasarnya
@@ -27,6 +28,7 @@ func NewServer(
 	authH *handlers.AuthHandler,
 	inspectionReportH *handlers.InspectionReportHandler,
 	villageH *handlers.VillageHandler,
+	idwH *handlers.IDWHandler,
 ) *Server {
 	app := fiber.New(fiber.Config{
 		AppName: "Radar Jentik API",
@@ -44,6 +46,7 @@ func NewServer(
 		authHandler:             authH,
 		inspectionReportHandler: inspectionReportH,
 		villageHandler:          villageH,
+		idwHandler:              idwH,
 	}
 
 	// Setup Routes
@@ -68,6 +71,9 @@ func (s *Server) setupRoutes() {
 
 	// Master Data Desa (Dibuat public agar bisa diakses saat dropdown registrasi di Flutter)
 	api.Get("/villages", s.villageHandler.GetAll)
+
+	// Rute untuk menghitung IDW
+	api.Post("/estimations/idw", s.idwHandler.Calculate)
 
 	// Inspection Report Routes (Protected - Wajib membawa Bearer Token JWT)
 	reports := api.Group("/reports", middleware.Protected(s.config))
