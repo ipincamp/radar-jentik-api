@@ -24,7 +24,7 @@ type GeoJSONFeatureCollection struct {
 type GeoJSONFeature struct {
 	Type       string                 `json:"type"`
 	Properties map[string]interface{} `json:"properties"`
-	// Kita tidak lagi mem-parsing Geometry karena ERD baru hanya menyimpan Nama Desa
+	Geometry   json.RawMessage        `json:"geometry"`
 }
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 	flag.Parse()
 
 	if *filePath == "" {
-		log.Fatal("Harap sertakan path file: go run cmd/seeder/main.go -file=desa_kasegeran.json")
+		log.Fatal("Harap sertakan path file: go run cmd/seeder/main.go -file=33.02_kelurahan.geojson")
 	}
 
 	// 2. Load Config & Connect DB
@@ -47,7 +47,7 @@ func main() {
 		log.Fatalf("Gagal koneksi database: %v", err)
 	}
 
-	// 3. Init Village Repository yang baru
+	// 3. Init Village Repository
 	villageRepo := repositories.NewVillageRepository(db)
 
 	// 4. Baca File GeoJSON
@@ -71,16 +71,17 @@ func main() {
 
 	successCount := 0
 	for _, f := range fc.Features {
-		// Ambil Nama dari Properties (Sesuaikan "nm_kelurahan" dengan key asli di file GeoJSON Anda)
+		// Ambil Nama dari Properties file GeoJSON Anda
 		nameIntf, ok := f.Properties["nm_kelurahan"]
 		name := "Desa Tidak Diketahui"
 		if ok {
 			name = fmt.Sprintf("%v", nameIntf)
 		}
 
-		// Buat Domain Object Village
+		// Buat Domain Object Village dengan menyertakan Boundary
 		newVillage := &domain.Village{
-			Name: name,
+			Name:     name,
+			Boundary: f.Geometry, // Simpan data spatial/geometry
 		}
 
 		// Simpan via Repository

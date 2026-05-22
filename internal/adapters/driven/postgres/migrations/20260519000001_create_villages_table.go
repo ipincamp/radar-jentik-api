@@ -9,8 +9,9 @@ import (
 
 func CreateVillages() *gormigrate.Migration {
 	type Village struct {
-		ID   string `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-		Name string `gorm:"type:varchar(100);not null"`
+		ID       string `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+		Name     string `gorm:"type:varchar(100);not null"`
+		Boundary []byte `gorm:"type:jsonb"`
 
 		CreatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 		UpdatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
