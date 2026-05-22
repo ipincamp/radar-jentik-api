@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	// Application settings
+	AppHost string
 	AppPort string
 	AppEnv  string
 
@@ -45,7 +46,8 @@ func LoadConfig() (*Config, error) {
 
 	// 2. Baca ke dalam struct
 	cfg := &Config{
-		AppPort:        getEnv("APP_PORT", ":3000"),
+		AppHost:        getEnv("APP_HOST", "localhost"),
+		AppPort:        getEnv("APP_PORT", "3000"),
 		AppEnv:         getEnv("APP_ENV", "development"),
 		DBHost:         os.Getenv("DB_HOST"),
 		DBPort:         os.Getenv("DB_PORT"),

@@ -66,7 +66,7 @@ func main() {
 
 	// Jalankan server di goroutine terpisah agar tidak memblokir quit channel
 	go func() {
-		addr := fmt.Sprintf("0.0.0.0:%s", cfg.AppPort)
+		addr := fmt.Sprintf("%s:%s", cfg.AppHost, cfg.AppPort)
 		log.Printf("Server is starting on %s...", addr)
 		if err := server.Start(addr); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Fatal error starting server: %v", err)
