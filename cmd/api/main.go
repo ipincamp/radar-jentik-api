@@ -45,19 +45,19 @@ func main() {
 	// A. Init Repositories
 	userRepo := repositories.NewUserRepo(db)
 	inspectionReportRepo := repositories.NewInspectionReportRepository(db)
-	villageRepo := repositories.NewVillageRepository(db) // Daftarkan repo desa
+	villageRepo := repositories.NewVillageRepository(db)
 
 	// B. Init Services
 	authService := services.NewAuthService(userRepo, tokenManager)
 	inspectionReportService := services.NewInspectionReportService(inspectionReportRepo)
-	villageService := services.NewVillageService(villageRepo) // Daftarkan service desa
+	villageService := services.NewVillageService(villageRepo)
 	idwService := services.NewIDWService()
 
 	// C. Init Handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	inspectionReportHandler := handlers.NewInspectionReportHandler(inspectionReportService)
-	villageHandler := handlers.NewVillageHandler(villageService) // Daftarkan handler desa
-	idwHandler := handlers.NewIDWHandler(idwService)
+	villageHandler := handlers.NewVillageHandler(villageService)
+	idwHandler := handlers.NewIDWHandler(idwService, inspectionReportService)
 
 	// 4. Inisialisasi HTTP Adapter (Fiber Server) dengan semua handler lengkap
 	server := internalHttp.NewServer(cfg, authHandler, inspectionReportHandler, villageHandler, idwHandler)
