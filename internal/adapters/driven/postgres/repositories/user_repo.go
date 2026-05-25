@@ -14,17 +14,20 @@ type UserRepo struct {
 	db *gorm.DB
 }
 
-// Skema DB lokal (Tambahkan VillageID di sini)
+// Skema DB lokal
 type User struct {
 	ID        string         `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
 	Name      string         `gorm:"type:varchar(100)"`
 	Username  string         `gorm:"type:varchar(100);uniqueIndex"`
 	Password  string         `gorm:"type:varchar(255)"`
 	Role      string         `gorm:"type:varchar(20)"`
-	VillageID string         `gorm:"type:uuid;not null"` // Menyimpan ID Desa Kader
+	VillageID string         `gorm:"type:uuid;not null"`
 	CreatedAt time.Time      `gorm:"type:timestamptz"`
 	UpdatedAt time.Time      `gorm:"type:timestamptz"`
 	DeletedAt gorm.DeletedAt `gorm:"type:timestamptz;index"`
+
+	// Tambahkan Relasi ke Village agar bisa di-Preload (Join)
+	Village *domain.Village `gorm:"foreignKey:VillageID"`
 }
 
 // Mapper: Skema DB -> Domain
@@ -35,9 +38,10 @@ func (u *User) ToDomain() *domain.User {
 		Username:  u.Username,
 		Password:  u.Password,
 		Role:      u.Role,
-		VillageID: u.VillageID, // Mapping ID Desa
+		VillageID: u.VillageID,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
+		Village:   u.Village, // Bawa data relasi desa
 	}
 }
 
@@ -49,7 +53,7 @@ func FromDomain(d *domain.User) *User {
 		Username:  d.Username,
 		Password:  d.Password,
 		Role:      d.Role,
-		VillageID: d.VillageID, // Mapping ID Desa
+		VillageID: d.VillageID,
 	}
 }
 
@@ -81,7 +85,8 @@ func (r *UserRepo) FindByUsername(ctx context.Context, username string) (*domain
 
 func (r *UserRepo) FindAll(ctx context.Context) ([]*domain.User, error) {
 	var usersDB []User
-	if err := r.db.WithContext(ctx).Find(&usersDB).Error; err != nil {
+	// Gunakan Preload untuk melakukan JOIN ke tabel villages
+	if err := r.db.WithContext(ctx).Preload("Village").Find(&usersDB).Error; err != nil {
 		return nil, err
 	}
 
@@ -90,4 +95,26 @@ func (r *UserRepo) FindAll(ctx context.Context) ([]*domain.User, error) {
 		domainUsers = append(domainUsers, u.ToDomain())
 	}
 	return domainUsers, nil
+}
+
+// ----- IMPLEMENTASI BARU ----- //
+
+func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error) {
+	var userDB User
+	err := r.db.WithContext(ctx).Preload("Village").Where("id = ?", id).First(&userDB).Error
+	if err != nil {
+		return nil, err
+	}
+	return userDB.ToDomain(), nil
+}
+
+func (r *UserRepo) Update(ctx context.Context, user *domain.User) error {
+	userDB := FromDomain(user)
+	// Hanya meng-update field yang tidak kosong
+	return r.db.WithContext(ctx).Model(&User{}).Where("id = ?", user.ID).Updates(userDB).Error
+}
+
+func (r *UserRepo) Delete(ctx context.Context, id string) error {
+	// Fitur Soft Delete bawaan Gorm
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&User{}).Error
 }

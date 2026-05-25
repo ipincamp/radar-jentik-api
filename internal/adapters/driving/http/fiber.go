@@ -69,6 +69,11 @@ func (s *Server) setupRoutes() {
 	auth.Post("/logout", middleware.Protected(s.config), s.authHandler.Logout)
 	auth.Get("/users", middleware.Protected(s.config), s.authHandler.ListUsers)
 
+	users := api.Group("/users", middleware.Protected(s.config))
+	users.Post("/", s.authHandler.CreateUser)
+	users.Put("/:id", s.authHandler.UpdateUser)
+	users.Delete("/:id", s.authHandler.DeleteUser)
+
 	// Master Data Desa (Dibuat public agar bisa diakses saat dropdown registrasi di Flutter)
 	api.Get("/villages", s.villageHandler.GetAll)
 

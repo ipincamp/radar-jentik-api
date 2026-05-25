@@ -79,3 +79,44 @@ func (s *authService) Login(ctx context.Context, username, password string) (str
 func (s *authService) GetAllUsers(ctx context.Context) ([]*domain.User, error) {
 	return s.userRepo.FindAll(ctx)
 }
+
+func (s *authService) CreateUser(ctx context.Context, user *domain.User) error {
+	return s.Register(ctx, user) // Menggunakan logika registrasi yang sama
+}
+
+func (s *authService) UpdateUser(ctx context.Context, id string, updatedData *domain.User) error {
+	// 1. Cek apakah user ada
+	existingUser, err := s.userRepo.FindByID(ctx, id)
+	if err != nil {
+		return errors.New("pengguna tidak ditemukan")
+	}
+
+	// 2. Validasi pencegahan username ganda jika diganti
+	if updatedData.Username != existingUser.Username {
+		exist, _ := s.userRepo.FindByUsername(ctx, updatedData.Username)
+		if exist != nil {
+			return errors.New("username sudah terdaftar, silakan gunakan yang lain")
+		}
+	}
+
+	// 3. Masukkan data baru
+	existingUser.FullName = updatedData.FullName
+	existingUser.Username = updatedData.Username
+	existingUser.VillageID = updatedData.VillageID
+
+	// 4. Update password hanya jika kolom password diisi
+	if updatedData.Password != "" {
+		hash, err := argon2id.CreateHash(updatedData.Password, argon2id.DefaultParams)
+		if err != nil {
+			return err
+		}
+		existingUser.Password = hash
+	}
+
+	// 5. Simpan pembaruan
+	return s.userRepo.Update(ctx, existingUser)
+}
+
+func (s *authService) DeleteUser(ctx context.Context, id string) error {
+	return s.userRepo.Delete(ctx, id)
+}
