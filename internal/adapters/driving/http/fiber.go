@@ -79,6 +79,7 @@ func (s *Server) setupRoutes() {
 
 	// Rute untuk menghitung IDW
 	api.Post("/estimations/idw", middleware.Protected(s.config), s.idwHandler.Calculate)
+	api.Post("/estimations/idw/predict-point", middleware.Protected(s.config), s.idwHandler.PredictSinglePoint)
 
 	// Inspection Report Routes (Protected - Wajib membawa Bearer Token JWT)
 	reports := api.Group("/reports", middleware.Protected(s.config))

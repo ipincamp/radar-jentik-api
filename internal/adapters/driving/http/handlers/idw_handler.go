@@ -95,3 +95,72 @@ func (h *IDWHandler) Calculate(c *fiber.Ctx) error {
 		"data":    gridResult,
 	})
 }
+
+func (h *IDWHandler) PredictSinglePoint(c *fiber.Ctx) error {
+	var req domain.IDWPointRequest
+
+	// 1. Parsing koordinat dari Flutter
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Format payload tidak valid",
+		})
+	}
+
+	// 2. Ambil Sesi User (Role & ID)
+	userID, ok1 := c.Locals("user_id").(string)
+	role, ok2 := c.Locals("role").(string)
+
+	if !ok1 || !ok2 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid"})
+	}
+
+	// 3. Ambil Data Inspeksi Riil dari Database
+	reports, err := h.reportService.GetMapData(c.Context(), userID, role)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Gagal mengambil data laporan inspeksi",
+		})
+	}
+
+	// 4. Transformasi ke format titik sampel
+	var samples []domain.SamplePoint
+	for _, r := range reports {
+		var value float64 = 0.0
+		if r.LarvaeStatus == 1 {
+			value = 100.0 // Ada jentik = 100 (Bahaya)
+		}
+		samples = append(samples, domain.SamplePoint{
+			Lat:   r.Latitude,
+			Lon:   r.Longitude,
+			Value: value,
+		})
+	}
+
+	if len(samples) == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Belum ada data sampel dari kader",
+		})
+	}
+
+	// 5. Kalkulasi Prediksi 1 Titik
+	// Kita gunakan power 2.0 sebagai default standar IDW
+	estimatedValue := h.idwService.CalculateSinglePoint(req.Lat, req.Lon, samples, 2.0)
+
+	// 6. Klasifikasi Zonasi
+	status := "Aman"
+	if estimatedValue >= 66.6 {
+		status = "Bahaya"
+	} else if estimatedValue >= 33.3 {
+		status = "Waspada"
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Berhasil memprediksi titik",
+		"data": fiber.Map{
+			"lat":    req.Lat,
+			"lon":    req.Lon,
+			"value":  estimatedValue,
+			"status": status,
+		},
+	})
+}

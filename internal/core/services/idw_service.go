@@ -23,7 +23,7 @@ func (s *idwService) CalculateIDWGrid(ctx context.Context, req domain.IDWRequest
 		for lon := req.MinLon; lon <= req.MaxLon; lon += req.Resolution {
 
 			// 2. Hitung estimasi IDW untuk titik (lat, lon) ini
-			estimatedValue := s.calculateSinglePoint(lat, lon, req.Samples, req.Power)
+			estimatedValue := s.CalculateSinglePoint(lat, lon, req.Samples, req.Power)
 
 			grid = append(grid, domain.GridPoint{
 				Lat:            lat,
@@ -37,7 +37,7 @@ func (s *idwService) CalculateIDWGrid(ctx context.Context, req domain.IDWRequest
 }
 
 // Fungsi internal untuk menghitung IDW pada 1 titik target (Z_j)
-func (s *idwService) calculateSinglePoint(targetLat, targetLon float64, samples []domain.SamplePoint, power float64) float64 {
+func (s *idwService) CalculateSinglePoint(targetLat, targetLon float64, samples []domain.SamplePoint, power float64) float64 {
 	var numerator float64 = 0   // Pembilang: Sum(Zi / d^p)
 	var denominator float64 = 0 // Penyebut: Sum(1 / d^p)
 

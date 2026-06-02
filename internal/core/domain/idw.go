@@ -24,3 +24,8 @@ type IDWRequest struct {
 	Power      float64       `json:"power"`      // Pangkat IDW (biasanya 2)
 	Samples    []SamplePoint `json:"samples"`    // Titik data observasi
 }
+
+type IDWPointRequest struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
