@@ -12,6 +12,7 @@ type InspectionReportRepository interface {
 	GetPending(ctx context.Context) ([]domain.InspectionReport, error)
 	UpdateStatus(ctx context.Context, id string, status string) error
 	GetValidReports(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
+	GetRecapData(ctx context.Context, userID, role string) ([]domain.ReportRecap, error)
 }
 
 type InspectionReportService interface {
@@ -20,4 +21,5 @@ type InspectionReportService interface {
 	GetPendingReports(ctx context.Context) ([]domain.InspectionReport, error)
 	ValidateReport(ctx context.Context, id string, status string) error
 	GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
+	ExportToExcel(ctx context.Context, userID, role string) ([]byte, error)
 }

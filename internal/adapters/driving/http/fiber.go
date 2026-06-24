@@ -94,6 +94,8 @@ func (s *Server) setupRoutes() {
 
 	// Rute Gabungan untuk Peta Spasial IDW
 	reports.Get("/map", s.inspectionReportHandler.GetMapData)
+
+	reports.Get("/export", s.inspectionReportHandler.ExportExcel)
 }
 
 // healthCheck handler untuk memastikan server berjalan dengan baik

@@ -169,3 +169,30 @@ func (h *InspectionReportHandler) GetMapData(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"data": reports})
 }
+
+func (h *InspectionReportHandler) ExportExcel(c *fiber.Ctx) error {
+	// 1. Ambil sesi user dari JWT
+	userID, ok1 := c.Locals("user_id").(string)
+	role, ok2 := c.Locals("role").(string)
+
+	if !ok1 || !ok2 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid"})
+	}
+
+	// 2. Panggil Service untuk membuat Excel
+	fileBytes, err := h.service.ExportToExcel(c.Context(), userID, role)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Gagal men-generate file Excel",
+		})
+	}
+
+	// 3. Atur Header HTTP agar browser/Flutter tahu ini adalah file unduhan
+	// Content-Type khusus format .xlsx
+	c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	// Nama file saat diunduh
+	c.Set("Content-Disposition", "attachment; filename=Laporan_Radar_Jentik.xlsx")
+
+	// 4. Kirim file biner-nya
+	return c.Send(fileBytes)
+}

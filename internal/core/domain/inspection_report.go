@@ -31,3 +31,29 @@ type InspectionReport struct {
 	Village          *Village          `gorm:"foreignKey:VillageID" json:"village,omitempty"`
 	ContainerDetails []ContainerDetail `gorm:"foreignKey:InspectionReportID" json:"container_details,omitempty"`
 }
+
+type ReportRecap struct {
+	RT                string
+	RumahDiperiksa    int
+	RumahPositif      int
+	BakMandiTotal     int
+	BakMandiPos       int
+	TempayanTotal     int
+	TempayanPos       int
+	PecahanBotolTotal int
+	PecahanBotolPos   int
+	BarangBekasTotal  int
+	BarangBekasPos    int
+	KulkasTotal       int
+	KulkasPos         int
+	TandonAirTotal    int
+	TandonAirPos      int
+	VasBungaTotal     int
+	VasBungaPos       int
+	PotBungaTotal     int
+	PotBungaPos       int
+	LainLainTotal     int
+	LainLainPos       int
+	TotalContainer    int
+	TotalContainerPos int
+}
