@@ -61,8 +61,16 @@ func (r *inspectionReportRepository) GetPending(ctx context.Context) ([]domain.I
 }
 
 // Ubah status laporan (Terima/Tolak)
-func (r *inspectionReportRepository) UpdateStatus(ctx context.Context, id string, status string) error {
-	return r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("id = ?", id).Update("validation_status", status).Error
+func (r *inspectionReportRepository) UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error {
+	// Query UPDATE sekarang menyertakan rejection_reason
+	query := `
+		UPDATE inspection_reports 
+		SET validation_status = $1, rejection_reason = $2, updated_at = NOW() 
+		WHERE id = $3
+	`
+
+	tx := r.db.WithContext(ctx).Exec(query, status, rejectionReason, reportID)
+	return tx.Error
 }
 
 // Ambil data untuk Peta Zonasi IDW (Hanya yang berstatus 'accept')

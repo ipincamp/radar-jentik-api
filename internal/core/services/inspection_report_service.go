@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -73,7 +74,7 @@ func (s *inspectionReportService) ValidateReport(ctx context.Context, id string,
 	if status != "accept" && status != "reject" {
 		return context.DeadlineExceeded // atau buat custom error
 	}
-	return s.repo.UpdateStatus(ctx, id, status)
+	return s.repo.UpdateStatus(ctx, id, status, nil)
 }
 
 func (s *inspectionReportService) GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error) {
@@ -254,4 +255,22 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 	}
 
 	return buf.Bytes(), nil
+}
+
+func (s *inspectionReportService) UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error {
+	var reasonPtr *string
+
+	if status == "reject" {
+		if rejectionReason == nil || *rejectionReason == "" {
+			return errors.New("alasan penolakan wajib diisi")
+		}
+		reasonPtr = rejectionReason
+	} else if status == "accept" {
+		// Jika diterima, pastikan alasannya NULL
+		reasonPtr = nil
+	} else {
+		return errors.New("status tidak valid")
+	}
+
+	return s.repo.UpdateStatus(ctx, reportID, status, reasonPtr)
 }

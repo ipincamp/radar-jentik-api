@@ -10,7 +10,7 @@ type InspectionReportRepository interface {
 	Create(ctx context.Context, report *domain.InspectionReport) error
 	GetByUserID(ctx context.Context, userID string) ([]domain.InspectionReport, error)
 	GetPending(ctx context.Context) ([]domain.InspectionReport, error)
-	UpdateStatus(ctx context.Context, id string, status string) error
+	UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error
 	GetValidReports(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
 	GetRecapData(ctx context.Context, userID, role string) ([]domain.ReportRecap, error)
 }
@@ -22,4 +22,5 @@ type InspectionReportService interface {
 	ValidateReport(ctx context.Context, id string, status string) error
 	GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
 	ExportToExcel(ctx context.Context, userID, role string) ([]byte, error)
+	UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error
 }

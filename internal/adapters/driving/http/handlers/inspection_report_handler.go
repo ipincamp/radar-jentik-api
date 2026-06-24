@@ -131,21 +131,29 @@ func (h *InspectionReportHandler) GetPending(c *fiber.Ctx) error {
 // 4. Fungsi ValidateReport (Untuk Tombol Terima/Tolak Petugas)
 // ---------------------------------------------------------
 func (h *InspectionReportHandler) ValidateReport(c *fiber.Ctx) error {
+	// 1. Ambil ID Laporan dari URL (misal: /api/v1/reports/:id/validate)
 	reportID := c.Params("id")
 
-	var req struct {
-		Status string `json:"status" validate:"required"`
-	}
-
+	// 2. Parsing Body JSON
+	var req domain.ValidateReportRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Status wajib diisi (accept/reject)"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Format data tidak valid",
+		})
 	}
 
-	if err := h.service.ValidateReport(c.Context(), reportID, req.Status); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal memvalidasi laporan"})
+	// 3. Panggil Service
+	// err := h.reportService.UpdateStatus(c.Context(), reportID, req.Status, req.RejectionReason)
+	err := h.service.ValidateReport(c.Context(), reportID, req.Status)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
-	return c.JSON(fiber.Map{"message": "Status laporan berhasil diperbarui"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Status laporan berhasil diperbarui",
+	})
 }
 
 // ---------------------------------------------------------

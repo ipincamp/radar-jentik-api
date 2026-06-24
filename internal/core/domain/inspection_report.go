@@ -22,6 +22,7 @@ type InspectionReport struct {
 	LarvaeStatus     int            `gorm:"type:int;not null" json:"larvae_status"`
 	ValidationStatus string         `gorm:"type:varchar(20);default:'pending'" json:"validation_status"`
 	InspectedAt      time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"inspected_at"`
+	RejectionReason  *string        `json:"rejection_reason" db:"rejection_reason"`
 	CreatedAt        time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt        time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
@@ -56,4 +57,9 @@ type ReportRecap struct {
 	LainLainPos       int
 	TotalContainer    int
 	TotalContainerPos int
+}
+
+type ValidateReportRequest struct {
+	Status          string `json:"status"`           // Isinya "accept" atau "reject"
+	RejectionReason string `json:"rejection_reason"` // Diisi alasan jika status "reject"
 }
