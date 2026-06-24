@@ -82,6 +82,10 @@ func (h *IDWHandler) Calculate(c *fiber.Ctx) error {
 		req.Resolution = 0.001
 	}
 
+	if req.Resolution < 0.0005 {
+		req.Resolution = 0.0005 // Batas kerapatan maksimum (0.0005 sudah sangat kecil)
+	}
+
 	// 5. Kalkulasi IDW menggunakan Service
 	gridResult, err := h.idwService.CalculateIDWGrid(c.Context(), req)
 	if err != nil {

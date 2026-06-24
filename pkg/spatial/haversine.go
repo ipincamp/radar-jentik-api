@@ -2,9 +2,11 @@ package spatial
 
 import "math"
 
+// Jari-jari rata-rata bumi dalam kilometer
 const earthRadiusKm = 6371.0
 
-// HaversineDistance menghitung jarak antara dua koordinat (latitude, longitude) dalam Kilometer
+// HaversineDistance menghitung jarak antara dua koordinat
+// (latitude, longitude) dalam Kilometer
 func HaversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	// Konversi derajat ke radian
 	dLat := (lat2 - lat1) * math.Pi / 180.0

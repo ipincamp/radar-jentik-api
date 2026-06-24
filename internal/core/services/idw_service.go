@@ -18,11 +18,19 @@ func NewIDWService() ports.IDWService {
 func (s *idwService) CalculateIDWGrid(ctx context.Context, req domain.IDWRequest) ([]domain.GridPoint, error) {
 	var grid []domain.GridPoint
 
-	// 1. Looping untuk membuat Grid Point berdasarkan area (Bounding Box) dan Resolusi
-	for lat := req.MinLat; lat <= req.MaxLat; lat += req.Resolution {
-		for lon := req.MinLon; lon <= req.MaxLon; lon += req.Resolution {
+	// 1. Hitung jumlah langkah (steps) berbentuk integer
+	latSteps := int(math.Ceil((req.MaxLat - req.MinLat) / req.Resolution))
+	lonSteps := int(math.Ceil((req.MaxLon - req.MinLon) / req.Resolution))
 
-			// 2. Hitung estimasi IDW untuk titik (lat, lon) ini
+	// 2. Looping menggunakan index (integer) lalu dikalikan dengan resolusi
+	// Ini menjamin jarak (lat, lon) sama persis dan tidak bergeser nilainya
+	for i := 0; i <= latSteps; i++ {
+		lat := req.MinLat + (float64(i) * req.Resolution)
+
+		for j := 0; j <= lonSteps; j++ {
+			lon := req.MinLon + (float64(j) * req.Resolution)
+
+			// 3. Hitung estimasi IDW untuk titik (lat, lon) ini
 			estimatedValue := s.CalculateSinglePoint(lat, lon, req.Samples, req.Power)
 
 			grid = append(grid, domain.GridPoint{
@@ -37,7 +45,11 @@ func (s *idwService) CalculateIDWGrid(ctx context.Context, req domain.IDWRequest
 }
 
 // Fungsi internal untuk menghitung IDW pada 1 titik target (Z_j)
-func (s *idwService) CalculateSinglePoint(targetLat, targetLon float64, samples []domain.SamplePoint, power float64) float64 {
+func (s *idwService) CalculateSinglePoint(
+	targetLat, targetLon float64,
+	samples []domain.SamplePoint,
+	power float64,
+) float64 {
 	var numerator float64 = 0   // Pembilang: Sum(Zi / d^p)
 	var denominator float64 = 0 // Penyebut: Sum(1 / d^p)
 
