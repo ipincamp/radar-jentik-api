@@ -31,9 +31,10 @@ type CreateReportRequest struct {
 }
 
 type ContainerDetailReq struct {
-	ContainerTypeID string `json:"container_type_id" validate:"required"`
-	InspectedCount  int    `json:"inspected_count"`
-	PositiveCount   int    `json:"positive_count"`
+	ContainerTypeID string  `json:"container_type_id" validate:"required"`
+	CustomName      *string `json:"custom_name"`
+	InspectedCount  int     `json:"inspected_count"`
+	PositiveCount   int     `json:"positive_count"`
 }
 
 // ---------------------------------------------------------
@@ -69,7 +70,8 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 	// Mapping Container Details
 	for _, cReq := range req.Containers {
 		report.ContainerDetails = append(report.ContainerDetails, domain.ContainerDetail{
-			ContainerTypeID: cReq.ContainerTypeID, // ✨ Map ID Wadah
+			ContainerTypeID: cReq.ContainerTypeID,
+			CustomName:      cReq.CustomName,
 			InspectedCount:  cReq.InspectedCount,
 			PositiveCount:   cReq.PositiveCount,
 		})

@@ -9,11 +9,12 @@ import (
 
 func CreateContainerDetailsTable() *gormigrate.Migration {
 	type ContainerDetail struct {
-		ID                 string `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-		InspectionReportID string `gorm:"type:uuid;not null;index"`
-		ContainerTypeID    string `gorm:"type:uuid;not null;index"`
-		InspectedCount     int    `gorm:"type:int;not null;default:0"`
-		PositiveCount      int    `gorm:"type:int;not null;default:0"`
+		ID                 string  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+		InspectionReportID string  `gorm:"type:uuid;not null;index"`
+		ContainerTypeID    string  `gorm:"type:uuid;not null;index"`
+		CustomName         *string `gorm:"type:varchar(255)"`
+		InspectedCount     int     `gorm:"type:int;not null;default:0"`
+		PositiveCount      int     `gorm:"type:int;not null;default:0"`
 
 		CreatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 		UpdatedAt time.Time      `gorm:"type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
