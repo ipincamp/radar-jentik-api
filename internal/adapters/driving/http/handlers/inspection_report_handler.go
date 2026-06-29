@@ -126,9 +126,9 @@ func (h *InspectionReportHandler) ValidateReport(c *fiber.Ctx) error {
 		})
 	}
 
-	// 3. Panggil Service
-	// err := h.reportService.UpdateStatus(c.Context(), reportID, req.Status, req.RejectionReason)
-	err := h.service.ValidateReport(c.Context(), reportID, req.Status)
+	// 3. Panggil Service UpdateStatus (yang memuat logika bisnis penolakan)
+	// Kita mengirimkan &req.RejectionReason (pointer) agar selaras dengan Service
+	err := h.service.UpdateStatus(c.Context(), reportID, req.Status, &req.RejectionReason)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
