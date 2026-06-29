@@ -19,22 +19,21 @@ func NewInspectionReportHandler(service ports.InspectionReportService) *Inspecti
 // ---------------------------------------------------------
 
 type CreateReportRequest struct {
-	VillageID      string  `json:"village_id" validate:"required"`
-	RT             string  `json:"rt" validate:"required"`
-	RW             string  `json:"rw" validate:"required"`
-	FamilyHeadName string  `json:"family_head_name"`
-	Latitude       float64 `json:"latitude" validate:"required"`
-	Longitude      float64 `json:"longitude" validate:"required"`
-	// LarvaeStatus diubah menjadi BOOL agar cocok dengan nilai Switch (true/false) di Flutter
-	LarvaeStatus bool                 `json:"larvae_status"`
-	Containers   []ContainerDetailReq `json:"containers" validate:"required,dive"`
+	VillageID      string               `json:"village_id" validate:"required"`
+	RT             string               `json:"rt" validate:"required"`
+	RW             string               `json:"rw" validate:"required"`
+	FamilyHeadName string               `json:"family_head_name"`
+	Latitude       float64              `json:"latitude" validate:"required"`
+	Longitude      float64              `json:"longitude" validate:"required"`
+	LarvaeStatus   bool                 `json:"larvae_status"`
+	PhotoURL       string               `json:"photo_url" validate:"required"`
+	Containers     []ContainerDetailReq `json:"containers" validate:"required,dive"`
 }
 
 type ContainerDetailReq struct {
-	ContainerType string `json:"container_type" validate:"required"`
-	// Tipe int sudah aman selama di Flutter Anda menggunakan int.parse(controller.text) saat mengirim JSON
-	InspectedCount int `json:"inspected_count"`
-	PositiveCount  int `json:"positive_count"`
+	ContainerTypeID string `json:"container_type_id" validate:"required"`
+	InspectedCount  int    `json:"inspected_count"`
+	PositiveCount   int    `json:"positive_count"`
 }
 
 // ---------------------------------------------------------
@@ -43,21 +42,12 @@ type ContainerDetailReq struct {
 func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 	req := new(CreateReportRequest)
 
-	// Parsing JSON Body
 	if err := c.BodyParser(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   "Format request tidak valid",
-			"details": err.Error(),
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Format request tidak valid"})
 	}
 
-	// Mengambil ID Kader dari JWT Token
-	userID, ok := c.Locals("user_id").(string)
-	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak valid atau tidak ditemukan"})
-	}
+	userID, _ := c.Locals("user_id").(string)
 
-	// Konversi Boolean (Flutter) ke Integer (PostgreSQL)
 	statusJentik := 0
 	if req.LarvaeStatus {
 		statusJentik = 1
@@ -72,30 +62,24 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 		FamilyHeadName: req.FamilyHeadName,
 		Latitude:       req.Latitude,
 		Longitude:      req.Longitude,
-		LarvaeStatus:   statusJentik, // Memasukkan hasil konversi 1/0
+		LarvaeStatus:   statusJentik,
+		PhotoURL:       req.PhotoURL,
 	}
 
 	// Mapping Container Details
 	for _, cReq := range req.Containers {
 		report.ContainerDetails = append(report.ContainerDetails, domain.ContainerDetail{
-			ContainerType:  cReq.ContainerType,
-			InspectedCount: cReq.InspectedCount,
-			PositiveCount:  cReq.PositiveCount,
+			ContainerTypeID: cReq.ContainerTypeID, // ✨ Map ID Wadah
+			InspectedCount:  cReq.InspectedCount,
+			PositiveCount:   cReq.PositiveCount,
 		})
 	}
 
-	// Simpan ke Database via Service
 	if err := h.service.CreateReport(c.Context(), report); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Gagal menyimpan laporan",
-			"details": err.Error(),
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Laporan berhasil dikirim",
-		"data":    report,
-	})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Laporan berhasil dikirim"})
 }
 
 // ---------------------------------------------------------

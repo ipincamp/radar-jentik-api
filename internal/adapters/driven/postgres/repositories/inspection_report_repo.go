@@ -94,35 +94,36 @@ func (r *inspectionReportRepository) GetValidReports(ctx context.Context, userID
 }
 
 func (r *inspectionReportRepository) GetRecapData(ctx context.Context, userID, role string) ([]domain.ReportRecap, error) {
-	// Query ini menggabungkan report dan container, lalu menjumlahkannya berdasarkan RT
-	// Hanya mengambil data yang statusnya 'accept' (sudah divalidasi)
+	// PENTING: Perhatikan penambahan "LEFT JOIN container_types ct"
+	// dan perubahan cd.container_type menjadi ct.name
 	query := `
 		SELECT
 			ir.rt,
 			COUNT(DISTINCT ir.id) as rumah_diperiksa,
 			COUNT(DISTINCT CASE WHEN ir.larvae_status = 1 THEN ir.id END) as rumah_positif,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Bak Kamar Mandi' THEN cd.inspected_count ELSE 0 END), 0) as bak_mandi_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Bak Kamar Mandi' THEN cd.positive_count ELSE 0 END), 0) as bak_mandi_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Tempayan' THEN cd.inspected_count ELSE 0 END), 0) as tempayan_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Tempayan' THEN cd.positive_count ELSE 0 END), 0) as tempayan_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Pecahan Botol/Air Kemasan' THEN cd.inspected_count ELSE 0 END), 0) as pecahan_botol_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Pecahan Botol/Air Kemasan' THEN cd.positive_count ELSE 0 END), 0) as pecahan_botol_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Barang Bekas' THEN cd.inspected_count ELSE 0 END), 0) as barang_bekas_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Barang Bekas' THEN cd.positive_count ELSE 0 END), 0) as barang_bekas_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Kulkas/Dispenser' THEN cd.inspected_count ELSE 0 END), 0) as kulkas_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Kulkas/Dispenser' THEN cd.positive_count ELSE 0 END), 0) as kulkas_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Tandon Air' THEN cd.inspected_count ELSE 0 END), 0) as tandon_air_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Tandon Air' THEN cd.positive_count ELSE 0 END), 0) as tandon_air_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Vas Bunga' THEN cd.inspected_count ELSE 0 END), 0) as vas_bunga_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Vas Bunga' THEN cd.positive_count ELSE 0 END), 0) as vas_bunga_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Pot Bunga' THEN cd.inspected_count ELSE 0 END), 0) as pot_bunga_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Pot Bunga' THEN cd.positive_count ELSE 0 END), 0) as pot_bunga_pos,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Lain-lain' THEN cd.inspected_count ELSE 0 END), 0) as lain_lain_total,
-			COALESCE(SUM(CASE WHEN cd.container_type = 'Lain-lain' THEN cd.positive_count ELSE 0 END), 0) as lain_lain_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Bak Kamar Mandi' THEN cd.inspected_count ELSE 0 END), 0) as bak_mandi_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Bak Kamar Mandi' THEN cd.positive_count ELSE 0 END), 0) as bak_mandi_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Tempayan' THEN cd.inspected_count ELSE 0 END), 0) as tempayan_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Tempayan' THEN cd.positive_count ELSE 0 END), 0) as tempayan_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Pecahan Botol/Air Kemasan' THEN cd.inspected_count ELSE 0 END), 0) as pecahan_botol_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Pecahan Botol/Air Kemasan' THEN cd.positive_count ELSE 0 END), 0) as pecahan_botol_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Barang Bekas' THEN cd.inspected_count ELSE 0 END), 0) as barang_bekas_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Barang Bekas' THEN cd.positive_count ELSE 0 END), 0) as barang_bekas_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Kulkas/Dispenser' THEN cd.inspected_count ELSE 0 END), 0) as kulkas_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Kulkas/Dispenser' THEN cd.positive_count ELSE 0 END), 0) as kulkas_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Tandon Air' THEN cd.inspected_count ELSE 0 END), 0) as tandon_air_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Tandon Air' THEN cd.positive_count ELSE 0 END), 0) as tandon_air_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Vas Bunga' THEN cd.inspected_count ELSE 0 END), 0) as vas_bunga_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Vas Bunga' THEN cd.positive_count ELSE 0 END), 0) as vas_bunga_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Pot Bunga' THEN cd.inspected_count ELSE 0 END), 0) as pot_bunga_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Pot Bunga' THEN cd.positive_count ELSE 0 END), 0) as pot_bunga_pos,
+			COALESCE(SUM(CASE WHEN ct.name = 'Lain-lain' THEN cd.inspected_count ELSE 0 END), 0) as lain_lain_total,
+			COALESCE(SUM(CASE WHEN ct.name = 'Lain-lain' THEN cd.positive_count ELSE 0 END), 0) as lain_lain_pos,
 			COALESCE(SUM(cd.inspected_count), 0) as total_container,
 			COALESCE(SUM(cd.positive_count), 0) as total_container_pos
 		FROM inspection_reports ir
 		LEFT JOIN container_details cd ON ir.id = cd.inspection_report_id
+		LEFT JOIN container_types ct ON cd.container_type_id = ct.id
 		WHERE ir.validation_status = 'accept'
 	`
 	// Jika role adalah kader, batasi hanya melihat data miliknya
@@ -146,16 +147,11 @@ func (r *inspectionReportRepository) GetRecapData(ctx context.Context, userID, r
 		var rec domain.ReportRecap
 		err := rows.Scan(
 			&rec.RT, &rec.RumahDiperiksa, &rec.RumahPositif,
-			&rec.BakMandiTotal, &rec.BakMandiPos,
-			&rec.TempayanTotal, &rec.TempayanPos,
-			&rec.PecahanBotolTotal, &rec.PecahanBotolPos,
-			&rec.BarangBekasTotal, &rec.BarangBekasPos,
-			&rec.KulkasTotal, &rec.KulkasPos,
-			&rec.TandonAirTotal, &rec.TandonAirPos,
-			&rec.VasBungaTotal, &rec.VasBungaPos,
-			&rec.PotBungaTotal, &rec.PotBungaPos,
-			&rec.LainLainTotal, &rec.LainLainPos,
-			&rec.TotalContainer, &rec.TotalContainerPos,
+			&rec.BakMandiTotal, &rec.BakMandiPos, &rec.TempayanTotal, &rec.TempayanPos,
+			&rec.PecahanBotolTotal, &rec.PecahanBotolPos, &rec.BarangBekasTotal, &rec.BarangBekasPos,
+			&rec.KulkasTotal, &rec.KulkasPos, &rec.TandonAirTotal, &rec.TandonAirPos,
+			&rec.VasBungaTotal, &rec.VasBungaPos, &rec.PotBungaTotal, &rec.PotBungaPos,
+			&rec.LainLainTotal, &rec.LainLainPos, &rec.TotalContainer, &rec.TotalContainerPos,
 		)
 		if err != nil {
 			return nil, err

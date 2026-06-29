@@ -46,21 +46,25 @@ func main() {
 	userRepo := repositories.NewUserRepo(db)
 	inspectionReportRepo := repositories.NewInspectionReportRepository(db)
 	villageRepo := repositories.NewVillageRepository(db)
+	containerTypeRepo := repositories.NewContainerTypeRepository(db)
 
 	// B. Init Services
 	authService := services.NewAuthService(userRepo, tokenManager)
 	inspectionReportService := services.NewInspectionReportService(inspectionReportRepo)
 	villageService := services.NewVillageService(villageRepo)
 	idwService := services.NewIDWService()
+	containerTypeService := services.NewContainerTypeService(containerTypeRepo)
 
 	// C. Init Handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	inspectionReportHandler := handlers.NewInspectionReportHandler(inspectionReportService)
 	villageHandler := handlers.NewVillageHandler(villageService)
 	idwHandler := handlers.NewIDWHandler(idwService, inspectionReportService)
+	containerTypeHandler := handlers.NewContainerTypeHandler(containerTypeService)
+	uploadHandler := handlers.NewUploadHandler()
 
 	// 4. Inisialisasi HTTP Adapter (Fiber Server) dengan semua handler lengkap
-	server := internalHttp.NewServer(cfg, authHandler, inspectionReportHandler, villageHandler, idwHandler)
+	server := internalHttp.NewServer(cfg, authHandler, inspectionReportHandler, villageHandler, idwHandler, containerTypeHandler, uploadHandler)
 
 	// Channel untuk menangkap signal interrupt (seperti Ctrl+C)
 	quit := make(chan os.Signal, 1)
