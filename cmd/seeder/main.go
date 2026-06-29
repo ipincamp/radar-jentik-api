@@ -99,10 +99,11 @@ func main() {
 
 		// 7. INSERT via Raw Query (Bypass Repository khusus untuk Seeder)
 		// Menggunakan ST_GeomFromGeoJSON untuk menerjemahkan string JSON menjadi titik Geometri spasial
-		// Menggunakan ST_Multi untuk memaksa/memastikan tipe datanya selalu MultiPolygon
+		// Menggunakan ST_Multi untuk memastikan tipe datanya MultiPolygon
+		// Menggunakan ST_Force2D untuk membuang dimensi Z (ketinggian) dari file GeoJSON
 		query := `
-			INSERT INTO villages (id, name, boundary, created_at, updated_at) 
-			VALUES (uuid_generate_v4(), ?, ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(?), 4326)), NOW(), NOW())
+			INSERT INTO villages (id, name, boundary, created_at, updated_at)
+			VALUES (uuid_generate_v4(), ?, ST_Force2D(ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(?), 4326))), NOW(), NOW())
 		`
 
 		if err := db.Exec(query, name, geoJSONStr).Error; err != nil {
