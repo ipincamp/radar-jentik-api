@@ -7,11 +7,11 @@ import (
 	"gorm.io/gorm"
 )
 
-func CreateContainerDetails() *gormigrate.Migration {
+func CreateContainerDetailsTable() *gormigrate.Migration {
 	type ContainerDetail struct {
 		ID                 string `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 		InspectionReportID string `gorm:"type:uuid;not null;index"`
-		ContainerType      string `gorm:"type:varchar(50);not null"`
+		ContainerTypeID    string `gorm:"type:uuid;not null;index"`
 		InspectedCount     int    `gorm:"type:int;not null;default:0"`
 		PositiveCount      int    `gorm:"type:int;not null;default:0"`
 
@@ -21,27 +21,18 @@ func CreateContainerDetails() *gormigrate.Migration {
 	}
 
 	return &gormigrate.Migration{
-		ID: "20260519000003",
-
+		ID: "00005",
 		Migrate: func(tx *gorm.DB) error {
-			if err := tx.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
-				return err
-			}
-
 			if err := tx.AutoMigrate(&ContainerDetail{}); err != nil {
 				return err
 			}
 
-			// Foreign Key di level database
-			return tx.Exec(`
-				ALTER TABLE container_details 
-				ADD CONSTRAINT fk_inspection_report 
-				FOREIGN KEY (inspection_report_id) 
-				REFERENCES inspection_reports(id) 
-				ON DELETE CASCADE
-			`).Error
-		},
+			// Foreign Keys
+			tx.Exec(`ALTER TABLE container_details ADD CONSTRAINT fk_detail_report FOREIGN KEY (inspection_report_id) REFERENCES inspection_reports(id) ON DELETE CASCADE`)
+			tx.Exec(`ALTER TABLE container_details ADD CONSTRAINT fk_detail_type FOREIGN KEY (container_type_id) REFERENCES container_types(id) ON DELETE RESTRICT`)
 
+			return nil
+		},
 		Rollback: func(tx *gorm.DB) error {
 			return tx.Migrator().DropTable(&ContainerDetail{})
 		},
