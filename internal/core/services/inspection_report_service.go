@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
@@ -79,7 +80,7 @@ func (s *inspectionReportService) GetMapData(ctx context.Context, userID string,
 }
 
 func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, role string) ([]byte, error) {
-	// 1. Ambil Data Detail
+	// 1. Ambil Data Detail dari Repository
 	reports, err := s.repo.GetExportData(ctx, userID, role)
 	if err != nil {
 		return nil, err
@@ -88,7 +89,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Jika kosong, kembalikan file kosong
 	if len(reports) == 0 {
 		var buf bytes.Buffer
 		f.Write(&buf)
@@ -97,25 +97,27 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 
 	defaultSheet := f.GetSheetName(f.GetActiveSheetIndex())
 
-	// 2. Kelompokkan Data berdasarkan [Desa + RW]
-	type GroupKey struct {
-		Village string
-		RW      string
-	}
-	groupedReports := make(map[GroupKey][]domain.InspectionReport)
-	var orderedKeys []GroupKey // Menjaga urutan grup
+	// 2. Kelompokkan Data HANYA berdasarkan [Desa]
+	groupedReports := make(map[string][]domain.InspectionReport)
+	var orderedVillages []string
 
 	for _, r := range reports {
-		key := GroupKey{Village: r.Village.Name, RW: r.RW}
-		if _, exists := groupedReports[key]; !exists {
-			orderedKeys = append(orderedKeys, key)
+		villageName := r.Village.Name
+		if _, exists := groupedReports[villageName]; !exists {
+			orderedVillages = append(orderedVillages, villageName)
 		}
-		groupedReports[key] = append(groupedReports[key], r)
+		groupedReports[villageName] = append(groupedReports[villageName], r)
 	}
 
 	containers := []string{
 		"Bak Kamar Mandi", "Tempayan", "Pecahan Botol/Air Kemasan", "Barang Bekas",
 		"Kulkas/Dispenser", "Tandon Air", "Vas Bunga", "Pot Bunga", "Lain-lain",
+	}
+
+	// Array statis untuk memetakan kolom melebihi huruf 'Z' (Mencegah Bug ASCII)
+	excelCols := []string{
+		"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
+		"Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC",
 	}
 
 	headerStyle, _ := f.NewStyle(&excelize.Style{
@@ -127,88 +129,99 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		},
 	})
 
-	// 3. Buat Sheet Baru untuk Setiap Kelompok (Setiap RW)
-	for _, key := range orderedKeys {
-		// Nama sheet Excel maksimal 31 karakter
-		sheetName := fmt.Sprintf("%s - RW %s", key.Village, key.RW)
+	// 3. Buat Sheet Baru untuk Setiap Desa
+	for _, villageName := range orderedVillages {
+		sheetName := villageName
 		if len(sheetName) > 31 {
 			sheetName = sheetName[:31]
 		}
 		f.NewSheet(sheetName)
 
-		// --- HEADER ---
+		// --- HEADER AKTUAL DESA ---
 		f.SetCellValue(sheetName, "A1", "Kabupaten")
 		f.SetCellValue(sheetName, "C1", ": Banyumas")
 		f.SetCellValue(sheetName, "A2", "Kecamatan")
 		f.SetCellValue(sheetName, "C2", ": Cilongok")
 		f.SetCellValue(sheetName, "A3", "Kelurahan/Desa")
-		f.SetCellValue(sheetName, "C3", ": "+key.Village)
-		f.SetCellValue(sheetName, "A4", "RW")
-		f.SetCellValue(sheetName, "C4", ": "+key.RW)
-		f.SetCellValue(sheetName, "A5", "Tanggal Unduh")
-		f.SetCellValue(sheetName, "C5", ": "+time.Now().Format("02 Jan 2006"))
+		f.SetCellValue(sheetName, "C3", ": "+villageName)
+		f.SetCellValue(sheetName, "A4", "Tanggal Unduh")
+		f.SetCellValue(sheetName, "C4", ": "+time.Now().Format("02 Jan 2006, 15:04 WIB"))
 
-		// --- TABEL HEADER (1 BARIS = 1 RUMAH) ---
-		f.SetCellValue(sheetName, "A8", "No")
-		f.MergeCell(sheetName, "A8", "A9")
+		// --- TABEL HEADER ---
+		f.SetCellValue(sheetName, "A7", "No")
+		f.MergeCell(sheetName, "A7", "A8")
 
-		f.SetCellValue(sheetName, "B8", "Nama Kepala Keluarga")
-		f.MergeCell(sheetName, "B8", "B9")
+		f.SetCellValue(sheetName, "B7", "Nama Kepala Keluarga")
+		f.MergeCell(sheetName, "B7", "B8")
 
-		f.SetCellValue(sheetName, "C8", "RT")
-		f.MergeCell(sheetName, "C8", "C9")
+		f.SetCellValue(sheetName, "C7", "RW")
+		f.MergeCell(sheetName, "C7", "C8")
 
-		f.SetCellValue(sheetName, "D8", "Latitude")
-		f.MergeCell(sheetName, "D8", "D9")
+		f.SetCellValue(sheetName, "D7", "RT")
+		f.MergeCell(sheetName, "D7", "D8")
 
-		f.SetCellValue(sheetName, "E8", "Longitude")
-		f.MergeCell(sheetName, "E8", "E9")
+		f.SetCellValue(sheetName, "E7", "Waktu Diterima")
+		f.MergeCell(sheetName, "E7", "E8")
 
-		f.SetCellValue(sheetName, "F8", "Container (Wadah)")
-		f.MergeCell(sheetName, "F8", "W8")
+		f.SetCellValue(sheetName, "F7", "Latitude")
+		f.MergeCell(sheetName, "F7", "F8")
 
-		colAscii := 70 // Kode ASCII huruf 'F'
+		f.SetCellValue(sheetName, "G7", "Longitude")
+		f.MergeCell(sheetName, "G7", "G8")
+
+		// Kolom Wadah (Huruf H sampai Y)
+		f.SetCellValue(sheetName, "H7", "Container (Wadah)")
+		f.MergeCell(sheetName, "H7", "Y7")
+
+		colIdx := 7 // Index 7 merujuk ke huruf 'H' di excelCols
 		for _, name := range containers {
-			colName1 := string(rune(colAscii))
-			colName2 := string(rune(colAscii + 1))
-			f.SetCellValue(sheetName, colName1+"9", name+"\n(Jml)")
-			f.SetCellValue(sheetName, colName2+"9", name+"\n(Pos)")
-			colAscii += 2
+			colName1 := excelCols[colIdx]
+			colName2 := excelCols[colIdx+1]
+			f.SetCellValue(sheetName, colName1+"8", name+"\n(Jml)")
+			f.SetCellValue(sheetName, colName2+"8", name+"\n(Pos)")
+			colIdx += 2
 		}
 
-		f.SetCellValue(sheetName, "X8", "Total Wadah")
-		f.MergeCell(sheetName, "X8", "Y8")
-		f.SetCellValue(sheetName, "X9", "Jml")
-		f.SetCellValue(sheetName, "Y9", "Pos")
+		// Total Wadah di Z dan AA
+		f.SetCellValue(sheetName, "Z7", "Total Wadah")
+		f.MergeCell(sheetName, "Z7", "AA7")
+		f.SetCellValue(sheetName, "Z8", "Jml")
+		f.SetCellValue(sheetName, "AA8", "Pos")
 
-		f.SetCellValue(sheetName, "Z8", "Status Jentik")
-		f.MergeCell(sheetName, "Z8", "Z9")
+		// Status Jentik di AB
+		f.SetCellValue(sheetName, "AB7", "Status Jentik")
+		f.MergeCell(sheetName, "AB7", "AB8")
 
-		f.SetCellStyle(sheetName, "A8", "Z9", headerStyle)
+		// Terapkan Styling Kotak/Garis Header
+		f.SetCellStyle(sheetName, "A7", "AB8", headerStyle)
 
 		// --- ISI TABEL (DATA DETAIL PER RUMAH) ---
-		startRow := 10
-		totalRumahDiperiksa := len(groupedReports[key])
+		startRow := 9
+		totalRumahDiperiksa := len(groupedReports[villageName])
 		totalRumahPositif := 0
 		totalKontainerSeluruh := 0
 		totalKontainerPositif := 0
 
-		for i, r := range groupedReports[key] {
+		for i, r := range groupedReports[villageName] {
 			row := startRow + i
 			f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), i+1)
-			f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), r.FamilyHeadName) // Menampilkan Nama KK
-			f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), r.RT)
-			f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), r.Latitude)  // Menampilkan Koordinat
-			f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), r.Longitude) // Menampilkan Koordinat
+			f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), r.FamilyHeadName)
+			f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), r.RW)
+			f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), r.RT)
+
+			// Mengisi Waktu Diterima dengan format mudah dibaca (Misal: 30 Jun 2026, 14:05 WIB)
+			f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), r.CreatedAt.Format("02 Jan 2006, 15:04 WIB"))
+
+			f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), r.Latitude)
+			f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), r.Longitude)
 
 			if r.LarvaeStatus == 1 {
 				totalRumahPositif++
-				f.SetCellValue(sheetName, fmt.Sprintf("Z%d", row), "Positif Jentik")
+				f.SetCellValue(sheetName, fmt.Sprintf("AB%d", row), "Positif Jentik")
 			} else {
-				f.SetCellValue(sheetName, fmt.Sprintf("Z%d", row), "Aman / Negatif")
+				f.SetCellValue(sheetName, fmt.Sprintf("AB%d", row), "Aman / Negatif")
 			}
 
-			// Mapping wadah yang dilaporkan di rumah ini
 			cMap := make(map[string]domain.ContainerDetail)
 			for _, cd := range r.ContainerDetails {
 				if cd.ContainerType != nil {
@@ -218,13 +231,12 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 
 			rowContainerTotal := 0
 			rowContainerPos := 0
-			colDataAscii := 70 // Mulai dari kolom 'F'
+			colDataIdx := 7 // Index 7 = Huruf 'H'
 
-			// Sebar jumlah wadah ke kolom masing-masing
 			for _, cName := range containers {
 				cd, exists := cMap[cName]
-				colName1 := string(rune(colDataAscii))
-				colName2 := string(rune(colDataAscii + 1))
+				colName1 := excelCols[colDataIdx]
+				colName2 := excelCols[colDataIdx+1]
 
 				if exists {
 					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName1, row), cd.InspectedCount)
@@ -235,19 +247,18 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName1, row), 0)
 					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName2, row), 0)
 				}
-				colDataAscii += 2
+				colDataIdx += 2
 			}
 
-			// Subtotal Kontainer Rumah
-			f.SetCellValue(sheetName, fmt.Sprintf("X%d", row), rowContainerTotal)
-			f.SetCellValue(sheetName, fmt.Sprintf("Y%d", row), rowContainerPos)
+			f.SetCellValue(sheetName, fmt.Sprintf("Z%d", row), rowContainerTotal)
+			f.SetCellValue(sheetName, fmt.Sprintf("AA%d", row), rowContainerPos)
 
 			totalKontainerSeluruh += rowContainerTotal
 			totalKontainerPositif += rowContainerPos
 		}
 
-		// --- FOOTER (REKAP KESELURUHAN RW TSB) ---
-		footerRow := startRow + len(groupedReports[key]) + 2
+		// --- FOOTER (REKAP KESELURUHAN DESA TSB) ---
+		footerRow := startRow + len(groupedReports[villageName]) + 2
 		abj, ci := 0.0, 0.0
 		if totalRumahDiperiksa > 0 {
 			abj = (float64(totalRumahDiperiksa-totalRumahPositif) / float64(totalRumahDiperiksa)) * 100
@@ -256,7 +267,7 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 			ci = (float64(totalKontainerPositif) / float64(totalKontainerSeluruh)) * 100
 		}
 
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", footerRow), fmt.Sprintf("REKAPITULASI %s - RW %s", key.Village, key.RW))
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", footerRow), "REKAPITULASI DESA "+strings.ToUpper(villageName))
 		f.SetCellStyle(sheetName, fmt.Sprintf("A%d", footerRow), fmt.Sprintf("A%d", footerRow), headerStyle)
 
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", footerRow+1), "Total Rumah Diperiksa")
@@ -272,7 +283,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", footerRow+4), fmt.Sprintf(": %.2f %%", ci))
 	}
 
-	// Hapus sheet bawaan (Sheet1) yang kosong
 	f.DeleteSheet(defaultSheet)
 
 	var buf bytes.Buffer
