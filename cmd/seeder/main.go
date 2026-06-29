@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driven/postgres"
-	"github.com/ipincamp/radar-jentik-api/internal/adapters/driven/postgres/repositories"
-	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
 )
 
@@ -47,51 +45,73 @@ func main() {
 		log.Fatalf("Gagal koneksi database: %v", err)
 	}
 
-	// 3. Init Village Repository
-	villageRepo := repositories.NewVillageRepository(db)
-
-	// 4. Baca File GeoJSON
+	// 3. Baca File GeoJSON
 	log.Printf("Membaca file: %s...", *filePath)
 	byteValue, err := os.ReadFile(*filePath)
 	if err != nil {
 		log.Fatalf("Gagal membaca file: %v", err)
 	}
 
-	// 5. Unmarshal JSON ke Struct
+	// 4. Unmarshal JSON ke Struct
 	var fc GeoJSONFeatureCollection
 	if err := json.Unmarshal(byteValue, &fc); err != nil {
 		log.Fatalf("Gagal parsing JSON: %v", err)
 	}
 
-	log.Printf("Ditemukan %d fitur desa. Memulai import...", len(fc.Features))
+	log.Printf("Ditemukan total %d fitur spasial di file. Memulai penyaringan desa...", len(fc.Features))
 
-	// 6. Loop dan Simpan ke DB
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	// 5. Daftar Desa Target di Kecamatan Cilongok
+	// Menggunakan Map (Hash Table) untuk pencarian cepat (O(1))
+	targetVillages := map[string]bool{
+		"Batuanten":    true,
+		"Cipete":       true,
+		"Jatisaba":     true,
+		"Kasegeran":    true,
+		"Langgongsari": true,
+		"Pageraji":     true,
+		"Panusupan":    true,
+		"Pejogol":      true,
+		"Sudimara":     true,
+	}
 
 	successCount := 0
+
+	// Gunakan timeout agar aman
+	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// 6. Loop dan Simpan ke DB
 	for _, f := range fc.Features {
-		// Ambil Nama dari Properties file GeoJSON Anda
+		// Ambil Nama Kelurahan/Desa dari file GeoJSON
 		nameIntf, ok := f.Properties["nm_kelurahan"]
-		name := "Desa Tidak Diketahui"
-		if ok {
-			name = fmt.Sprintf("%v", nameIntf)
+		if !ok {
+			continue
+		}
+		name := fmt.Sprintf("%v", nameIntf)
+
+		// FILTERING: Lewati (skip) jika nama desa tidak ada di dalam daftar targetVillages
+		if !targetVillages[name] {
+			continue
 		}
 
-		// Buat Domain Object Village dengan menyertakan Boundary
-		newVillage := &domain.Village{
-			Name:     name,
-			Boundary: f.Geometry, // Simpan data spatial/geometry
-		}
+		// Konversi data geometri mentah (RawMessage) ke dalam format String JSON
+		geoJSONStr := string(f.Geometry)
 
-		// Simpan via Repository
-		if err := villageRepo.Create(ctx, newVillage); err != nil {
-			log.Printf("❌ Gagal menyimpan %s: %v", name, err)
+		// 7. INSERT via Raw Query (Bypass Repository khusus untuk Seeder)
+		// Menggunakan ST_GeomFromGeoJSON untuk menerjemahkan string JSON menjadi titik Geometri spasial
+		// Menggunakan ST_Multi untuk memaksa/memastikan tipe datanya selalu MultiPolygon
+		query := `
+			INSERT INTO villages (id, name, boundary, created_at, updated_at) 
+			VALUES (uuid_generate_v4(), ?, ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(?), 4326)), NOW(), NOW())
+		`
+
+		if err := db.Exec(query, name, geoJSONStr).Error; err != nil {
+			log.Printf("❌ Gagal menyimpan desa %s: %v", name, err)
 		} else {
-			log.Printf("✅ Berhasil menyimpan desa: %s (ID: %s)", newVillage.Name, newVillage.ID)
+			log.Printf("✅ Berhasil menyimpan desa target: %s", name)
 			successCount++
 		}
 	}
 
-	log.Printf("🎉 Import selesai! %d/%d desa berhasil ditambahkan ke database.", successCount, len(fc.Features))
+	log.Printf("🎉 Import selesai! %d desa target berhasil ditambahkan ke database.", successCount)
 }
