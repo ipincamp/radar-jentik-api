@@ -161,3 +161,24 @@ func (r *inspectionReportRepository) GetRecapData(ctx context.Context, userID, r
 
 	return recaps, nil
 }
+
+func (r *inspectionReportRepository) GetExportData(ctx context.Context, userID, role string) ([]domain.InspectionReport, error) {
+	var reports []domain.InspectionReport
+
+	// Kita ambil laporan beserta Relasi Desa dan Relasi Jenis Wadah-nya
+	query := r.db.WithContext(ctx).
+		Preload("Village").
+		Preload("ContainerDetails.ContainerType").
+		Where("validation_status = ?", "accept")
+
+	if role == "cadre" {
+		query = query.Where("village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
+	}
+
+	// Lakukan JOIN agar bisa mengurutkan dari A-Z berdasarkan Nama Desa, lalu RW, lalu RT
+	err := query.Joins("JOIN villages ON villages.id = inspection_reports.village_id").
+		Order("villages.name ASC, inspection_reports.rw ASC, inspection_reports.rt ASC").
+		Find(&reports).Error
+
+	return reports, err
+}

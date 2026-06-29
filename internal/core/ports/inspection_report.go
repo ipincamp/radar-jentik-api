@@ -13,6 +13,7 @@ type InspectionReportRepository interface {
 	UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error
 	GetValidReports(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
 	GetRecapData(ctx context.Context, userID, role string) ([]domain.ReportRecap, error)
+	GetExportData(ctx context.Context, userID, role string) ([]domain.InspectionReport, error)
 }
 
 type InspectionReportService interface {
