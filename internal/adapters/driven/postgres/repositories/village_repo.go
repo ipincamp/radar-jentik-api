@@ -43,3 +43,36 @@ func (r *villageRepository) Create(ctx context.Context, village *domain.Village)
 	}
 	return nil
 }
+
+// Ambil Daftar Desa dengan Paginasi
+func (r *villageRepository) GetPaginated(ctx context.Context, page, limit int) ([]domain.Village, int64, error) {
+	var villages []domain.Village
+	var totalData int64
+
+	// 1. Base Query
+	baseQuery := r.db.WithContext(ctx).Model(&domain.Village{})
+
+	// 2. Hitung Total Data
+	if err := baseQuery.Count(&totalData).Error; err != nil {
+		return nil, 0, err
+	}
+	if totalData == 0 {
+		return []domain.Village{}, 0, nil
+	}
+
+	// 3. Hitung Offset
+	offset := (page - 1) * limit
+
+	// 4. Ambil Data (Diurutkan berdasarkan Abjad A-Z)
+	err := baseQuery.
+		Order("name ASC").
+		Limit(limit).
+		Offset(offset).
+		Find(&villages).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return villages, totalData, nil
+}
