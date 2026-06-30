@@ -70,10 +70,15 @@ func (s *Server) setupRoutes() {
 	auth.Post("/register", s.authHandler.Register)
 	auth.Post("/login", s.authHandler.Login)
 	auth.Post("/logout", middleware.Protected(s.config), s.authHandler.Logout)
-	auth.Get("/users", middleware.Protected(s.config), s.authHandler.ListUsers)
 
 	users := api.Group("/users", middleware.Protected(s.config))
-	users.Post("/", s.authHandler.CreateUser)
+	// 1. Rute Statis
+	users.Get("/me", s.authHandler.GetMe)     // Ambil profil sendiri
+	users.Put("/me", s.authHandler.UpdateMe)  // Edit profil sendiri
+	users.Get("/", s.authHandler.ListUsers)   // Ambil daftar user (Paginasi)
+	users.Post("/", s.authHandler.CreateUser) // Buat akun baru (oleh Petugas)
+
+	// 2. Rute Dinamis (Dengan parameter ID, untuk Petugas mengedit/menghapus kader)
 	users.Put("/:id", s.authHandler.UpdateUser)
 	users.Delete("/:id", s.authHandler.DeleteUser)
 

@@ -93,6 +93,52 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	return utils.Success(c, fiber.StatusOK, "Logout berhasil", nil)
 }
 
+// Fungsi GetMe (Ambil Profil Sendiri)
+func (h *AuthHandler) GetMe(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(string)
+	if !ok {
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "")
+	}
+
+	user, err := h.authService.GetUserByID(c.Context(), userID)
+	if err != nil || user == nil {
+		return utils.Error(c, fiber.StatusNotFound, "Pengguna tidak ditemukan", err)
+	}
+
+	user.Password = "" // Sembunyikan hash password dari response
+	return utils.Success(c, fiber.StatusOK, "Profil berhasil diambil", user)
+}
+
+// Fungsi UpdateMe (Edit Profil Sendiri)
+func (h *AuthHandler) UpdateMe(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(string)
+	if !ok {
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "")
+	}
+
+	req := new(UpdateUserRequest)
+	if err := c.BodyParser(req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
+	}
+
+	user := &domain.User{
+		FullName:  req.FullName,
+		Username:  req.Username,
+		Password:  req.Password,
+		VillageID: req.VillageID,
+	}
+
+	// Kita bisa me-reuse fungsi UpdateUser milik service!
+	if err := h.authService.UpdateUser(c.Context(), userID, user); err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal memperbarui profil", err.Error())
+	}
+
+	user.Password = ""
+	user.ID = userID
+
+	return utils.Success(c, fiber.StatusOK, "Profil berhasil diperbarui", user)
+}
+
 // Fungsi List Users (Hanya untuk role officer)
 func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
 	// 1. Tangkap parameter dari URL (Default: halaman 1, limit 10 per halaman)

@@ -19,6 +19,7 @@ type UserRepository interface {
 type AuthService interface {
 	Register(ctx context.Context, user *domain.User) error
 	Login(ctx context.Context, username, password string) (string, string, error)
+	GetUserByID(ctx context.Context, id string) (*domain.User, error)
 	GetAllUsers(ctx context.Context) ([]*domain.User, error)
 	CreateUser(ctx context.Context, user *domain.User) error
 	UpdateUser(ctx context.Context, id string, user *domain.User) error

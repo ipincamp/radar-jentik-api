@@ -75,6 +75,11 @@ func (s *authService) Login(ctx context.Context, username, password string) (str
 	return token, user.Role, nil // Return token beserta role-nya
 }
 
+// GetUserByID untuk memenuhi kebutuhan fitur Manajemen Kader
+func (s *authService) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
+	return s.userRepo.FindByID(ctx, id)
+}
+
 // GetAllUsers untuk memenuhi kebutuhan fitur Manajemen Kader
 func (s *authService) GetAllUsers(ctx context.Context) ([]*domain.User, error) {
 	return s.userRepo.FindAll(ctx)
