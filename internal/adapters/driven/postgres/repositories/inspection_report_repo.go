@@ -182,3 +182,71 @@ func (r *inspectionReportRepository) GetExportData(ctx context.Context, userID, 
 
 	return reports, err
 }
+
+// Ambil Riwayat Laporan Milik 1 Kader (Paginated)
+func (r *inspectionReportRepository) GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.InspectionReport, int64, error) {
+	var reports []domain.InspectionReport
+	var totalData int64
+
+	// Base Query: Hanya laporan milik kader ini
+	baseQuery := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("user_id = ?", userID)
+
+	// Hitung total data
+	if err := baseQuery.Count(&totalData).Error; err != nil {
+		return nil, 0, err
+	}
+	if totalData == 0 {
+		return []domain.InspectionReport{}, 0, nil
+	}
+
+	offset := (page - 1) * limit
+
+	// Ambil data (Urutkan dari yang paling baru dikirim / DESC)
+	err := baseQuery.
+		Preload("Village").
+		Preload("ContainerDetails.ContainerType").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&reports).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return reports, totalData, nil
+}
+
+// Ambil Daftar Antrean Laporan untuk Petugas (Paginated)
+func (r *inspectionReportRepository) GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error) {
+	var reports []domain.InspectionReport
+	var totalData int64
+
+	// Base Query: Hanya status 'pending'
+	baseQuery := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("validation_status = ?", "pending")
+
+	if err := baseQuery.Count(&totalData).Error; err != nil {
+		return nil, 0, err
+	}
+	if totalData == 0 {
+		return []domain.InspectionReport{}, 0, nil
+	}
+
+	offset := (page - 1) * limit
+
+	// Ambil data (Urutkan dari yang paling LAMA / ASC, seperti antrean loket kasir / FIFO)
+	err := baseQuery.
+		Preload("User"). // Tampilkan siapa kadernya
+		Preload("Village").
+		Preload("ContainerDetails.ContainerType").
+		Order("created_at ASC").
+		Limit(limit).
+		Offset(offset).
+		Find(&reports).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return reports, totalData, nil
+}

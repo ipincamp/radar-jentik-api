@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
@@ -91,29 +92,60 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 // 2. Fungsi GetHistory (Untuk Halaman Riwayat Kader)
 // ---------------------------------------------------------
 func (h *InspectionReportHandler) GetHistory(c *fiber.Ctx) error {
+	// 1. Ambil User ID dari token JWT (Kader yang sedang login)
 	userID, ok := c.Locals("user_id").(string)
 	if !ok {
-		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "User session is invalid")
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid, harap login ulang", "")
 	}
 
-	reports, err := h.service.GetCadreHistory(c.Context(), userID)
+	// 2. Tangkap parameter pagination dari URL (Default: page 1, limit 10)
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 10)
+
+	// 3. Panggil Service versi Paginated
+	reports, totalData, err := h.service.GetPaginatedHistory(c.Context(), userID, page, limit)
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil riwayat laporan", err.Error())
 	}
 
-	return utils.Success(c, fiber.StatusOK, "Data riwayat laporan berhasil diambil", reports)
+	// 4. Susun Metadata Pagination
+	totalPages := int(math.Ceil(float64(totalData) / float64(limit)))
+	meta := utils.PaginationMeta{
+		CurrentPage: page,
+		PageSize:    limit,
+		TotalItems:  totalData,
+		TotalPages:  totalPages,
+	}
+
+	// 5. Kembalikan Response dengan format Paginated
+	return utils.Paginated(c, fiber.StatusOK, "Riwayat laporan berhasil diambil", reports, meta)
 }
 
 // ---------------------------------------------------------
 // 3. Fungsi GetPending (Untuk Halaman Validasi Petugas)
 // ---------------------------------------------------------
 func (h *InspectionReportHandler) GetPending(c *fiber.Ctx) error {
-	reports, err := h.service.GetPendingReports(c.Context())
+	// 1. Tangkap Query Params
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 10)
+
+	// 2. Lempar ke Service
+	reports, totalData, err := h.service.GetPaginatedPending(c.Context(), page, limit)
 	if err != nil {
-		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil daftar laporan pending", err.Error())
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil laporan", err.Error())
 	}
 
-	return utils.Success(c, fiber.StatusOK, "Data laporan pending berhasil diambil", reports)
+	// 3. Susun Metadata
+	totalPages := int(math.Ceil(float64(totalData) / float64(limit)))
+	meta := utils.PaginationMeta{
+		CurrentPage: page,
+		PageSize:    limit,
+		TotalItems:  totalData,
+		TotalPages:  totalPages,
+	}
+
+	// 4. Return format standar
+	return utils.Paginated(c, fiber.StatusOK, "Daftar antrean laporan", reports, meta)
 }
 
 // ---------------------------------------------------------
@@ -161,6 +193,9 @@ func (h *InspectionReportHandler) GetMapData(c *fiber.Ctx) error {
 	return utils.Success(c, fiber.StatusOK, "Data peta spasial berhasil diambil", reports)
 }
 
+// ---------------------------------------------------------
+// 6. Fungsi ExportExcel (Untuk Tombol Export Excel)
+// ---------------------------------------------------------
 func (h *InspectionReportHandler) ExportExcel(c *fiber.Ctx) error {
 	// 1. Ambil sesi user dari JWT
 	userID, ok1 := c.Locals("user_id").(string)
