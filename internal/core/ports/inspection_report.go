@@ -16,6 +16,7 @@ type InspectionReportRepository interface {
 	GetExportData(ctx context.Context, userID, role string) ([]domain.InspectionReport, error)
 	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.InspectionReport, int64, error)
 	GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error)
+	CreateBulk(ctx context.Context, reports []*domain.InspectionReport) error
 }
 
 type InspectionReportService interface {
@@ -28,4 +29,5 @@ type InspectionReportService interface {
 	UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error
 	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.InspectionReport, int64, error)
 	GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error)
+	CreateBulkReport(ctx context.Context, reports []*domain.InspectionReport) error
 }

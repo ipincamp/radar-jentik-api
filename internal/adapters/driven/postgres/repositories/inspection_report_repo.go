@@ -250,3 +250,25 @@ func (r *inspectionReportRepository) GetPaginatedPending(ctx context.Context, pa
 
 	return reports, totalData, nil
 }
+
+// Fungsi untuk menyimpan banyak laporan sekaligus (bulk insert)
+func (r *inspectionReportRepository) CreateBulk(ctx context.Context, reports []*domain.InspectionReport) error {
+	// Gunakan transaksi agar jika 1 gagal, semua dibatalkan (konsisten)
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, report := range reports {
+			// 1. Simpan Laporan Induk dan Detail Wadahnya
+			if err := tx.Omit("Geom").Create(report).Error; err != nil {
+				return err
+			}
+
+			// 2. Buat Spasial Titik PostGIS untuk laporan ini
+			geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?::float, ?::float), 4326)", report.Longitude, report.Latitude)
+
+			// Update kolom geom
+			if err := tx.Model(report).Update("geom", geomExpr).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

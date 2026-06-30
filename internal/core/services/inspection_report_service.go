@@ -358,3 +358,29 @@ func (s *inspectionReportService) GetPaginatedPending(ctx context.Context, page,
 	}
 	return s.repo.GetPaginatedPending(ctx, page, limit)
 }
+
+// Fungsi CreateBulkReport bertugas memproses beberapa laporan sekaligus, dengan validasi yang sama seperti CreateReport.
+func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports []*domain.InspectionReport) error {
+	for i, report := range reports {
+		if report.PhotoURL == "" {
+			return fmt.Errorf("laporan ke-%d: foto bukti wajib disertakan", i+1)
+		}
+		if len(report.ContainerDetails) == 0 {
+			return fmt.Errorf("laporan ke-%d: minimal harus melaporkan satu jenis wadah", i+1)
+		}
+
+		// Logika Hybrid Pencarian Desa (Seperti pada insert biasa)
+		if report.VillageID == "" {
+			village, err := s.villageRepo.GetByCoordinate(ctx, report.Latitude, report.Longitude)
+			if err != nil {
+				return fmt.Errorf("laporan ke-%d: lokasi berada di luar wilayah terdaftar", i+1)
+			}
+			report.VillageID = village.ID
+		}
+
+		report.ValidationStatus = "pending"
+		report.InspectedAt = time.Now()
+	}
+
+	return s.repo.CreateBulk(ctx, reports)
+}

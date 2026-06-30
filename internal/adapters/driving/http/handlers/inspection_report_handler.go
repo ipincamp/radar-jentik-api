@@ -41,6 +41,10 @@ type ContainerDetailReq struct {
 	PositiveCount   int     `json:"positive_count"`
 }
 
+type BulkCreateReportRequest struct {
+	Reports []CreateReportRequest `json:"reports" validate:"required,dive"`
+}
+
 // ---------------------------------------------------------
 // 1. Fungsi Create (Untuk Form Laporan Kader)
 // ---------------------------------------------------------
@@ -217,4 +221,63 @@ func (h *InspectionReportHandler) ExportExcel(c *fiber.Ctx) error {
 
 	// 4. Kirim file biner-nya
 	return c.Send(fileBytes)
+}
+
+// ---------------------------------------------------------
+// 7. Fungsi CreateBulk (Untuk Sinkronisasi Massal Laporan Kader)
+// ---------------------------------------------------------
+func (h *InspectionReportHandler) CreateBulk(c *fiber.Ctx) error {
+	userID, ok := c.Locals("user_id").(string)
+	if !ok {
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "")
+	}
+
+	req := new(BulkCreateReportRequest)
+	if err := c.BodyParser(req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
+	}
+
+	// Jika array kosong
+	if len(req.Reports) == 0 {
+		return utils.Error(c, fiber.StatusBadRequest, "Data laporan kosong", nil)
+	}
+
+	var domainReports []*domain.InspectionReport
+
+	// Mapping dari Request (DTO) ke Domain Array
+	for _, r := range req.Reports {
+		report := &domain.InspectionReport{
+			UserID:         userID,
+			VillageID:      r.VillageID, // Bisa kosong karena dihandle service
+			RT:             r.RT,
+			RW:             r.RW,
+			FamilyHeadName: r.FamilyHeadName,
+			Latitude:       r.Latitude,
+			Longitude:      r.Longitude,
+			LarvaeStatus:   0,
+			PhotoURL:       r.PhotoURL,
+		}
+
+		if r.LarvaeStatus {
+			report.LarvaeStatus = 1
+		}
+
+		for _, cReq := range r.Containers {
+			report.ContainerDetails = append(report.ContainerDetails, domain.ContainerDetail{
+				ContainerTypeID: cReq.ContainerTypeID,
+				CustomName:      cReq.CustomName,
+				InspectedCount:  cReq.InspectedCount,
+				PositiveCount:   cReq.PositiveCount,
+			})
+		}
+
+		domainReports = append(domainReports, report)
+	}
+
+	// Lempar ke Service
+	if err := h.service.CreateBulkReport(c.Context(), domainReports); err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal memproses sinkronisasi massal", err.Error())
+	}
+
+	return utils.Success(c, fiber.StatusCreated, fmt.Sprintf("%d laporan berhasil disinkronisasi", len(domainReports)), nil)
 }

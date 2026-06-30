@@ -90,6 +90,7 @@ func (s *Server) setupRoutes() {
 
 	reports := api.Group("/reports", middleware.Protected(s.config))
 	reports.Post("/", s.inspectionReportHandler.Create)
+	reports.Post("/bulk", s.inspectionReportHandler.CreateBulk)
 	reports.Get("/history", s.inspectionReportHandler.GetHistory)
 	reports.Get("/pending", s.inspectionReportHandler.GetPending)
 	reports.Put("/:id/validate", s.inspectionReportHandler.ValidateReport)
