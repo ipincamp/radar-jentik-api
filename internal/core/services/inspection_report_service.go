@@ -36,14 +36,15 @@ func (s *inspectionReportService) CreateReport(ctx context.Context, report *doma
 		return errors.New("minimal harus melaporkan satu jenis wadah")
 	}
 
-	// OTOMATISASI PENCARIAN DESA BERDASARKAN KOORDINAT
-	village, err := s.villageRepo.GetByCoordinate(ctx, report.Latitude, report.Longitude)
-	if err != nil {
-		return errors.New("lokasi anda berada di luar batas wilayah desa yang terdaftar di sistem")
+	if report.VillageID == "" {
+		// Jika kader/frontend TIDAK mengirimkan ID Desa, kita auto-detect dari koordinat
+		village, err := s.villageRepo.GetByCoordinate(ctx, report.Latitude, report.Longitude)
+		if err != nil {
+			return errors.New("lokasi anda berada di luar wilayah, silakan pilih desa secara manual")
+		}
+		// Isi secara otomatis
+		report.VillageID = village.ID
 	}
-
-	// Timpa / Isi VillageID secara otomatis!
-	report.VillageID = village.ID
 
 	// Set default value
 	report.ValidationStatus = "pending"
