@@ -30,10 +30,10 @@ type CreateReportRequest struct {
 	FamilyHeadName string               `json:"family_head_name"`
 	Latitude       float64              `json:"latitude" validate:"required"`
 	Longitude      float64              `json:"longitude" validate:"required"`
-	LarvaeStatus   bool                 `json:"larvae_status"`
 	PhotoURL       string               `json:"photo_url" validate:"required"`
 	InspectedAt    string               `json:"inspected_at"`
 	Containers     []ContainerDetailReq `json:"containers" validate:"required,dive"`
+	// LarvaeStatus   bool                 `json:"larvae_status"`
 }
 
 type ContainerDetailReq struct {
@@ -59,10 +59,10 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 
 	userID, _ := c.Locals("user_id").(string)
 
-	statusJentik := 0
-	if req.LarvaeStatus {
-		statusJentik = 1
-	}
+	// statusJentik := 0
+	// if req.LarvaeStatus {
+	// 	statusJentik = 1
+	// }
 
 	// Mapping Request ke Domain Entity
 	report := &domain.InspectionReport{
@@ -73,8 +73,8 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 		FamilyHeadName: req.FamilyHeadName,
 		Latitude:       req.Latitude,
 		Longitude:      req.Longitude,
-		LarvaeStatus:   statusJentik,
-		PhotoURL:       req.PhotoURL,
+		// LarvaeStatus:   statusJentik,
+		PhotoURL: req.PhotoURL,
 	}
 
 	if req.InspectedAt != "" {
@@ -264,8 +264,8 @@ func (h *InspectionReportHandler) CreateBulk(c *fiber.Ctx) error {
 			FamilyHeadName: r.FamilyHeadName,
 			Latitude:       r.Latitude,
 			Longitude:      r.Longitude,
-			LarvaeStatus:   0,
-			PhotoURL:       r.PhotoURL,
+			// LarvaeStatus:   0,
+			PhotoURL: r.PhotoURL,
 		}
 
 		if r.InspectedAt != "" {
@@ -276,9 +276,9 @@ func (h *InspectionReportHandler) CreateBulk(c *fiber.Ctx) error {
 			}
 		}
 
-		if r.LarvaeStatus {
-			report.LarvaeStatus = 1
-		}
+		// if r.LarvaeStatus {
+		// 	report.LarvaeStatus = 1
+		// }
 
 		for _, cReq := range r.Containers {
 			report.ContainerDetails = append(report.ContainerDetails, domain.ContainerDetail{

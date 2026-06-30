@@ -46,6 +46,14 @@ func (s *inspectionReportService) CreateReport(ctx context.Context, report *doma
 		report.VillageID = village.ID
 	}
 
+	report.LarvaeStatus = 0 // Asumsikan aman secara default
+	for _, container := range report.ContainerDetails {
+		if container.PositiveCount > 0 {
+			report.LarvaeStatus = 1 // Jika ketemu 1 saja yang positif, langsung tandai positif
+			break                   // Hentikan perulangan (hemat memori dan waktu komputasi)
+		}
+	}
+
 	// IsZero() akan bernilai true jika di Handler tadi r.InspectedAt kosong atau gagal di-parse.
 	if report.InspectedAt.IsZero() {
 		report.InspectedAt = time.Now() // Fallback: Gunakan jam server saat sinkronisasi
@@ -380,6 +388,14 @@ func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports 
 				return fmt.Errorf("laporan ke-%d: lokasi berada di luar wilayah terdaftar", i+1)
 			}
 			report.VillageID = village.ID
+		}
+
+		report.LarvaeStatus = 0
+		for _, container := range report.ContainerDetails {
+			if container.PositiveCount > 0 {
+				report.LarvaeStatus = 1
+				break
+			}
 		}
 
 		// IsZero() akan bernilai true jika di Handler tadi r.InspectedAt kosong atau gagal di-parse.
