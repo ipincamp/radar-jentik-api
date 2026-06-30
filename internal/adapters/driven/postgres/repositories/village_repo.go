@@ -76,3 +76,19 @@ func (r *villageRepository) GetPaginated(ctx context.Context, page, limit int) (
 
 	return villages, totalData, nil
 }
+
+// Fungsi untuk mencari Desa dari titik Koordinat
+func (r *villageRepository) GetByCoordinate(ctx context.Context, lat, lon float64) (*domain.Village, error) {
+	var village domain.Village
+
+	// PostGIS Query: ST_Intersects (Apakah titik X,Y menyentuh/berada di dalam Polygon boundary desa?)
+	// CATATAN PENTING: ST_MakePoint urutannya harus (Longitude/X, Latitude/Y)
+	query := "ST_Intersects(boundary, ST_SetSRID(ST_MakePoint(?, ?), 4326))"
+
+	err := r.db.WithContext(ctx).Where(query, lon, lat).First(&village).Error
+	if err != nil {
+		return nil, err // Akan me-return error (misal: RecordNotFound) jika koordinat di luar area peta
+	}
+
+	return &village, nil
+}

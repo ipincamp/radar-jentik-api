@@ -50,7 +50,7 @@ func main() {
 
 	// B. Init Services
 	authService := services.NewAuthService(userRepo, tokenManager)
-	inspectionReportService := services.NewInspectionReportService(inspectionReportRepo)
+	inspectionReportService := services.NewInspectionReportService(inspectionReportRepo, villageRepo)
 	villageService := services.NewVillageService(villageRepo)
 	idwService := services.NewIDWService()
 	containerTypeService := services.NewContainerTypeService(containerTypeRepo)

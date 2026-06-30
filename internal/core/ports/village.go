@@ -11,6 +11,7 @@ type VillageRepository interface {
 	FindByID(ctx context.Context, id string) (*domain.Village, error)
 	Create(ctx context.Context, village *domain.Village) error
 	GetPaginated(ctx context.Context, page, limit int) ([]domain.Village, int64, error)
+	GetByCoordinate(ctx context.Context, lat, lon float64) (*domain.Village, error)
 }
 
 type VillageService interface {

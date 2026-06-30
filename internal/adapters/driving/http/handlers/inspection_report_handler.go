@@ -23,7 +23,7 @@ func NewInspectionReportHandler(service ports.InspectionReportService) *Inspecti
 // ---------------------------------------------------------
 
 type CreateReportRequest struct {
-	VillageID      string               `json:"village_id" validate:"required"`
+	VillageID      string               `json:"village_id"`
 	RT             string               `json:"rt" validate:"required"`
 	RW             string               `json:"rw" validate:"required"`
 	FamilyHeadName string               `json:"family_head_name"`

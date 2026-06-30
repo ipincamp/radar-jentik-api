@@ -14,32 +14,42 @@ import (
 )
 
 type inspectionReportService struct {
-	repo ports.InspectionReportRepository
+	repo        ports.InspectionReportRepository
+	villageRepo ports.VillageRepository
 }
 
-func NewInspectionReportService(repo ports.InspectionReportRepository) ports.InspectionReportService {
+func NewInspectionReportService(repo ports.InspectionReportRepository, villageRepo ports.VillageRepository) ports.InspectionReportService {
 	return &inspectionReportService{
-		repo: repo,
+		repo:        repo,
+		villageRepo: villageRepo,
 	}
 }
 
 // CreateReport bertugas memproses payload dan memvalidasi aturan bisnis
 func (s *inspectionReportService) CreateReport(ctx context.Context, report *domain.InspectionReport) error {
-	// 1. VALIDASI BISNIS: Wajib melampirkan URL Foto (Permintaan Petugas)
+	// Validasi input
 	if report.PhotoURL == "" {
 		return errors.New("foto bukti inspeksi lapangan wajib disertakan")
 	}
-
-	// 2. VALIDASI BISNIS: Minimal harus ada 1 wadah yang dilaporkan
+	// Validasi minimal harus melaporkan satu jenis wadah
 	if len(report.ContainerDetails) == 0 {
 		return errors.New("minimal harus melaporkan satu jenis wadah")
 	}
 
-	// 3. Set default value sebelum masuk ke database
+	// OTOMATISASI PENCARIAN DESA BERDASARKAN KOORDINAT
+	village, err := s.villageRepo.GetByCoordinate(ctx, report.Latitude, report.Longitude)
+	if err != nil {
+		return errors.New("lokasi anda berada di luar batas wilayah desa yang terdaftar di sistem")
+	}
+
+	// Timpa / Isi VillageID secara otomatis!
+	report.VillageID = village.ID
+
+	// Set default value
 	report.ValidationStatus = "pending"
 	report.InspectedAt = time.Now()
 
-	// 4. Kirim ke repository untuk disimpan
+	// Simpan ke database
 	return s.repo.Create(ctx, report)
 }
 
