@@ -13,6 +13,7 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id string) (*domain.User, error)
 	Update(ctx context.Context, user *domain.User) error
 	Delete(ctx context.Context, id string) error
+	GetPaginatedUsers(ctx context.Context, page int, limit int) ([]*domain.User, int64, error)
 }
 
 type AuthService interface {
@@ -22,4 +23,5 @@ type AuthService interface {
 	CreateUser(ctx context.Context, user *domain.User) error
 	UpdateUser(ctx context.Context, id string, user *domain.User) error
 	DeleteUser(ctx context.Context, id string) error
+	GetPaginatedUsers(ctx context.Context, page int, limit int) ([]*domain.User, int64, error)
 }

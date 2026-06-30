@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"math"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
@@ -93,40 +95,67 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 
 // Fungsi List Users (Hanya untuk role officer)
 func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
-	users, err := h.authService.GetAllUsers(c.Context())
+	// 1. Tangkap parameter dari URL (Default: halaman 1, limit 10 per halaman)
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 10)
+
+	// 2. Lempar page dan limit ke Service & Repository
+	// (Anda harus menyesuaikan repo Anda untuk memakai gorm .Offset() dan .Limit())
+	users, totalData, err := h.authService.GetPaginatedUsers(c.Context(), page, limit)
 	if err != nil {
-		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil data daftar kader", err.Error())
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil data", err.Error())
 	}
 
-	var response []fiber.Map
-	for _, u := range users {
-		// ===============================================
-		// FILTER: Lewati / Jangan masukkan jika bukan kader
-		// ===============================================
-		if u.Role != "cadre" {
-			continue
+	// 3. Hitung total halaman (Total Data dibagi Limit, bulatkan ke atas)
+	totalPages := int(math.Ceil(float64(totalData) / float64(limit)))
+
+	// 4. Susun Meta
+	meta := utils.PaginationMeta{
+		CurrentPage: page,
+		PageSize:    limit,
+		TotalItems:  totalData,
+		TotalPages:  totalPages,
+	}
+
+	// 5. Kembalikan Response Paginated
+	return utils.Paginated(c, fiber.StatusOK, "Berhasil mengambil data kader", users, meta)
+
+	/*
+		users, err := h.authService.GetAllUsers(c.Context())
+		if err != nil {
+			return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil data daftar kader", err.Error())
 		}
 
-		villageName := ""
-		if u.Village != nil {
-			villageName = u.Village.Name
+		var response []fiber.Map
+		for _, u := range users {
+			// ===============================================
+			// FILTER: Lewati / Jangan masukkan jika bukan kader
+			// ===============================================
+			if u.Role != "cadre" {
+				continue
+			}
+
+			villageName := ""
+			if u.Village != nil {
+				villageName = u.Village.Name
+			}
+			response = append(response, fiber.Map{
+				"id":           u.ID,
+				"full_name":    u.FullName,
+				"username":     u.Username,
+				"role":         u.Role,
+				"village_id":   u.VillageID,
+				"village_name": villageName,
+			})
 		}
-		response = append(response, fiber.Map{
-			"id":           u.ID,
-			"full_name":    u.FullName,
-			"username":     u.Username,
-			"role":         u.Role,
-			"village_id":   u.VillageID,
-			"village_name": villageName,
-		})
-	}
 
-	// Mencegah return null jika list kader masih kosong murni
-	if response == nil {
-		response = []fiber.Map{}
-	}
+		// Mencegah return null jika list kader masih kosong murni
+		if response == nil {
+			response = []fiber.Map{}
+		}
 
-	return utils.Success(c, fiber.StatusOK, "Data daftar kader berhasil diambil", response)
+		return utils.Success(c, fiber.StatusOK, "Data daftar kader berhasil diambil", response)
+	*/
 }
 
 // Fungsi Create User (Hanya untuk role officer)

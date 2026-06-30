@@ -120,3 +120,20 @@ func (s *authService) UpdateUser(ctx context.Context, id string, updatedData *do
 func (s *authService) DeleteUser(ctx context.Context, id string) error {
 	return s.userRepo.Delete(ctx, id)
 }
+
+// Tambahkan fungsi baru di struct service Anda
+func (s *authService) GetPaginatedUsers(ctx context.Context, page, limit int) ([]*domain.User, int64, error) {
+	// Proteksi pencegahan limit nol atau negatif agar tidak terjadi error SQL
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10 // Default per halaman
+	}
+	// Batasi maksimal data per request agar server tidak jebol jika frontend iseng kirim limit=999999
+	if limit > 100 {
+		limit = 100
+	}
+
+	return s.userRepo.GetPaginatedUsers(ctx, page, limit)
+}

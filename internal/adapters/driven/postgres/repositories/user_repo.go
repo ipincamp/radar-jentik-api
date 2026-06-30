@@ -101,8 +101,6 @@ func (r *UserRepo) FindAll(ctx context.Context) ([]*domain.User, error) {
 	return domainUsers, nil
 }
 
-// ----- IMPLEMENTASI BARU ----- //
-
 func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error) {
 	var userDB User
 	err := r.db.WithContext(ctx).Preload("Village").Where("id = ?", id).First(&userDB).Error
@@ -121,4 +119,47 @@ func (r *UserRepo) Update(ctx context.Context, user *domain.User) error {
 func (r *UserRepo) Delete(ctx context.Context, id string) error {
 	// Fitur Soft Delete bawaan Gorm
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&User{}).Error
+}
+
+func (r *UserRepo) GetPaginatedUsers(ctx context.Context, page int, limit int) ([]*domain.User, int64, error) {
+	var usersDB []User
+	var totalData int64
+
+	// 1. Buat Base Query (Bisa ditambahkan .Where("role = ?", "cadre") jika butuh filter khusus kader)
+	baseQuery := r.db.WithContext(ctx).Model(&User{})
+
+	// 2. Hitung TOTAL DATA keseluruhan (wajib dipanggil SEBELUM Limit & Offset)
+	if err := baseQuery.Count(&totalData).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Jika data kosong, langsung return agar tidak perlu eksekusi database lagi
+	if totalData == 0 {
+		return []*domain.User{}, 0, nil
+	}
+
+	// 3. Hitung OFFSET (Data dilewati)
+	// Rumus baku: (Halaman saat ini - 1) * Limit
+	// Contoh: Halaman 2, limit 10 -> (2-1) * 10 = 10. Berarti lewati 10 baris pertama.
+	offset := (page - 1) * limit
+
+	// 4. Ambil Data (Tarik dari DB dengan Limit, Offset, dan Preload/Join)
+	err := baseQuery.
+		Preload("Village").       // Tetap lakukan Join ke Master Desa
+		Order("created_at DESC"). // Urutkan dari yang terbaru (Best Practice)
+		Limit(limit).
+		Offset(offset).
+		Find(&usersDB).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 5. Mapping ke Object Domain
+	var domainUsers []*domain.User
+	for _, u := range usersDB {
+		domainUsers = append(domainUsers, u.ToDomain())
+	}
+
+	return domainUsers, totalData, nil
 }
