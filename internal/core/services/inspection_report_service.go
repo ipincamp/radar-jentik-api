@@ -217,15 +217,31 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 
 			if r.LarvaeStatus == 1 {
 				totalRumahPositif++
-				f.SetCellValue(sheetName, fmt.Sprintf("AB%d", row), "Positif Jentik")
+				f.SetCellValue(sheetName, fmt.Sprintf("AB%d", row), "Positif")
 			} else {
-				f.SetCellValue(sheetName, fmt.Sprintf("AB%d", row), "Aman / Negatif")
+				f.SetCellValue(sheetName, fmt.Sprintf("AB%d", row), "Negatif")
 			}
 
-			cMap := make(map[string]domain.ContainerDetail)
+			type ContainerAgg struct {
+				Inspected int
+				Positive  int
+			}
+
+			cMap := make(map[string]ContainerAgg)
+
 			for _, cd := range r.ContainerDetails {
 				if cd.ContainerType != nil {
-					cMap[cd.ContainerType.Name] = cd
+					typeName := cd.ContainerType.Name
+
+					// Ambil data agregasi saat ini (jika belum ada, nilai default-nya 0)
+					currentAgg := cMap[typeName]
+
+					// Tambahkan jumlah dari baris database saat ini
+					currentAgg.Inspected += cd.InspectedCount
+					currentAgg.Positive += cd.PositiveCount
+
+					// Simpan kembali ke map
+					cMap[typeName] = currentAgg
 				}
 			}
 
@@ -234,15 +250,15 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 			colDataIdx := 7 // Index 7 = Huruf 'H'
 
 			for _, cName := range containers {
-				cd, exists := cMap[cName]
+				agg, exists := cMap[cName] // Mengambil struct agregasi
 				colName1 := excelCols[colDataIdx]
 				colName2 := excelCols[colDataIdx+1]
 
 				if exists {
-					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName1, row), cd.InspectedCount)
-					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName2, row), cd.PositiveCount)
-					rowContainerTotal += cd.InspectedCount
-					rowContainerPos += cd.PositiveCount
+					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName1, row), agg.Inspected)
+					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName2, row), agg.Positive)
+					rowContainerTotal += agg.Inspected
+					rowContainerPos += agg.Positive
 				} else {
 					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName1, row), 0)
 					f.SetCellValue(sheetName, fmt.Sprintf("%s%d", colName2, row), 0)
