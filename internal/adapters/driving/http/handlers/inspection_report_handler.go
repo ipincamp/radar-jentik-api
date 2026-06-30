@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
@@ -31,6 +32,7 @@ type CreateReportRequest struct {
 	Longitude      float64              `json:"longitude" validate:"required"`
 	LarvaeStatus   bool                 `json:"larvae_status"`
 	PhotoURL       string               `json:"photo_url" validate:"required"`
+	InspectedAt    string               `json:"inspected_at"`
 	Containers     []ContainerDetailReq `json:"containers" validate:"required,dive"`
 }
 
@@ -73,6 +75,14 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 		Longitude:      req.Longitude,
 		LarvaeStatus:   statusJentik,
 		PhotoURL:       req.PhotoURL,
+	}
+
+	if req.InspectedAt != "" {
+		// Parse string ISO 8601 dari Flutter
+		parsedTime, err := time.Parse(time.RFC3339, req.InspectedAt)
+		if err == nil {
+			report.InspectedAt = parsedTime // Gunakan waktu dari HP kader
+		}
 	}
 
 	// Mapping Container Details
@@ -248,7 +258,7 @@ func (h *InspectionReportHandler) CreateBulk(c *fiber.Ctx) error {
 	for _, r := range req.Reports {
 		report := &domain.InspectionReport{
 			UserID:         userID,
-			VillageID:      r.VillageID, // Bisa kosong karena dihandle service
+			VillageID:      r.VillageID,
 			RT:             r.RT,
 			RW:             r.RW,
 			FamilyHeadName: r.FamilyHeadName,
@@ -256,6 +266,14 @@ func (h *InspectionReportHandler) CreateBulk(c *fiber.Ctx) error {
 			Longitude:      r.Longitude,
 			LarvaeStatus:   0,
 			PhotoURL:       r.PhotoURL,
+		}
+
+		if r.InspectedAt != "" {
+			// Parse string ISO 8601 dari Flutter
+			parsedTime, err := time.Parse(time.RFC3339, r.InspectedAt)
+			if err == nil {
+				report.InspectedAt = parsedTime
+			}
 		}
 
 		if r.LarvaeStatus {

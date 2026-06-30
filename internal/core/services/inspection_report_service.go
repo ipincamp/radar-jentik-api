@@ -46,9 +46,13 @@ func (s *inspectionReportService) CreateReport(ctx context.Context, report *doma
 		report.VillageID = village.ID
 	}
 
+	// IsZero() akan bernilai true jika di Handler tadi r.InspectedAt kosong atau gagal di-parse.
+	if report.InspectedAt.IsZero() {
+		report.InspectedAt = time.Now() // Fallback: Gunakan jam server saat sinkronisasi
+	}
+
 	// Set default value
 	report.ValidationStatus = "pending"
-	report.InspectedAt = time.Now()
 
 	// Simpan ke database
 	return s.repo.Create(ctx, report)
@@ -378,8 +382,12 @@ func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports 
 			report.VillageID = village.ID
 		}
 
+		// IsZero() akan bernilai true jika di Handler tadi r.InspectedAt kosong atau gagal di-parse.
+		if report.InspectedAt.IsZero() {
+			report.InspectedAt = time.Now()
+		}
+
 		report.ValidationStatus = "pending"
-		report.InspectedAt = time.Now()
 	}
 
 	return s.repo.CreateBulk(ctx, reports)
