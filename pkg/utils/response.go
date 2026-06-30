@@ -27,3 +27,29 @@ func Error(c *fiber.Ctx, statusCode int, message string, errors interface{}) err
 		Errors:  errors,
 	})
 }
+
+// Struktur Metadata Pagination
+type PaginationMeta struct {
+	CurrentPage int   `json:"current_page"`
+	TotalPages  int   `json:"total_pages"`
+	PageSize    int   `json:"page_size"`
+	TotalItems  int64 `json:"total_items"`
+}
+
+// Struktur Response Khusus Pagination
+type PaginatedResponse struct {
+	Success bool           `json:"success"`
+	Message string         `json:"message"`
+	Data    interface{}    `json:"data"`
+	Meta    PaginationMeta `json:"meta"`
+}
+
+// Helper untuk Response Sukses dengan Pagination
+func Paginated(c *fiber.Ctx, statusCode int, message string, data interface{}, meta PaginationMeta) error {
+	return c.Status(statusCode).JSON(PaginatedResponse{
+		Success: true,
+		Message: message,
+		Data:    data,
+		Meta:    meta,
+	})
+}
