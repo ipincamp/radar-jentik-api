@@ -79,20 +79,23 @@ func (s *inspectionReportService) GetMapData(ctx context.Context, userID string,
 	return s.repo.GetValidReports(ctx, userID, role)
 }
 
-func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, role string) ([]byte, error) {
+func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, role string) ([]byte, string, error) {
 	// 1. Ambil Data Detail dari Repository
 	reports, err := s.repo.GetExportData(ctx, userID, role)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	f := excelize.NewFile()
 	defer f.Close()
 
+	timeStr := time.Now().Format("02Jan2006_1504")
+
 	if len(reports) == 0 {
 		var buf bytes.Buffer
 		f.Write(&buf)
-		return buf.Bytes(), nil
+		// Jika kosong, beri nama file kosong
+		return buf.Bytes(), fmt.Sprintf("RadarJentik_%s_Kosong.xlsx", timeStr), nil
 	}
 
 	defaultSheet := f.GetSheetName(f.GetActiveSheetIndex())
@@ -303,7 +306,16 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 
 	var buf bytes.Buffer
 	if err := f.Write(&buf); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return buf.Bytes(), nil
+	villageNameForFile := "Semua_Desa" // Default jika petugas mendownload seluruh desa sekaligus
+	if len(orderedVillages) == 1 {
+		// Jika hanya ada 1 desa (misal diunduh oleh kader), gunakan nama desa tersebut.
+		// Spasi diganti underscore agar nama file rapi (misal: "Batu Anten" -> "Batu_Anten")
+		villageNameForFile = "Desa_" + strings.ReplaceAll(orderedVillages[0], " ", "_")
+	}
+
+	fileName := fmt.Sprintf("RadarJentik_%s_%s.xlsx", timeStr, villageNameForFile)
+
+	return buf.Bytes(), fileName, nil
 }

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
@@ -174,18 +176,14 @@ func (h *InspectionReportHandler) ExportExcel(c *fiber.Ctx) error {
 	}
 
 	// 2. Panggil Service untuk membuat Excel
-	fileBytes, err := h.service.ExportToExcel(c.Context(), userID, role)
+	fileBytes, fileName, err := h.service.ExportToExcel(c.Context(), userID, role)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Gagal men-generate file Excel",
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	// 3. Atur Header HTTP agar browser/Flutter tahu ini adalah file unduhan
-	// Content-Type khusus format .xlsx
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
 	c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	// Nama file saat diunduh
-	c.Set("Content-Disposition", "attachment; filename=Laporan_Radar_Jentik.xlsx")
 
 	// 4. Kirim file biner-nya
 	return c.Send(fileBytes)

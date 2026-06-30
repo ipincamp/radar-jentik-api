@@ -22,6 +22,6 @@ type InspectionReportService interface {
 	GetPendingReports(ctx context.Context) ([]domain.InspectionReport, error)
 	ValidateReport(ctx context.Context, id string, status string) error
 	GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
-	ExportToExcel(ctx context.Context, userID, role string) ([]byte, error)
+	ExportToExcel(ctx context.Context, userID, role string) ([]byte, string, error)
 	UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error
 }
