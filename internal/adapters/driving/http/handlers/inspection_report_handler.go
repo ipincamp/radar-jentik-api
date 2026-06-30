@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
+	"github.com/ipincamp/radar-jentik-api/pkg/utils"
 )
 
 type InspectionReportHandler struct {
@@ -46,7 +47,7 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 	req := new(CreateReportRequest)
 
 	if err := c.BodyParser(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Format request tidak valid"})
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
 	}
 
 	userID, _ := c.Locals("user_id").(string)
@@ -80,10 +81,10 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.CreateReport(c.Context(), report); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal membuat laporan", err.Error())
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Laporan berhasil dikirim"})
+	return utils.Success(c, fiber.StatusCreated, "Laporan berhasil dikirim", nil)
 }
 
 // ---------------------------------------------------------
@@ -92,15 +93,15 @@ func (h *InspectionReportHandler) Create(c *fiber.Ctx) error {
 func (h *InspectionReportHandler) GetHistory(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(string)
 	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID tidak valid atau tidak ditemukan"})
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "User session is invalid")
 	}
 
 	reports, err := h.service.GetCadreHistory(c.Context(), userID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil riwayat laporan"})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil riwayat laporan", err.Error())
 	}
 
-	return c.JSON(fiber.Map{"data": reports})
+	return utils.Success(c, fiber.StatusOK, "Data riwayat laporan berhasil diambil", reports)
 }
 
 // ---------------------------------------------------------
@@ -109,10 +110,10 @@ func (h *InspectionReportHandler) GetHistory(c *fiber.Ctx) error {
 func (h *InspectionReportHandler) GetPending(c *fiber.Ctx) error {
 	reports, err := h.service.GetPendingReports(c.Context())
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil daftar laporan pending"})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil daftar laporan pending", err.Error())
 	}
 
-	return c.JSON(fiber.Map{"data": reports})
+	return utils.Success(c, fiber.StatusOK, "Data laporan pending berhasil diambil", reports)
 }
 
 // ---------------------------------------------------------
@@ -125,23 +126,17 @@ func (h *InspectionReportHandler) ValidateReport(c *fiber.Ctx) error {
 	// 2. Parsing Body JSON
 	var req domain.ValidateReportRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Format data tidak valid",
-		})
+		return utils.Error(c, fiber.StatusBadRequest, "Format data tidak valid", err.Error())
 	}
 
 	// 3. Panggil Service UpdateStatus (yang memuat logika bisnis penolakan)
 	// Kita mengirimkan &req.RejectionReason (pointer) agar selaras dengan Service
 	err := h.service.UpdateStatus(c.Context(), reportID, req.Status, &req.RejectionReason)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal memperbarui status laporan", err.Error())
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Status laporan berhasil diperbarui",
-	})
+	return utils.Success(c, fiber.StatusOK, "Status laporan berhasil diperbarui", nil)
 }
 
 // ---------------------------------------------------------
@@ -154,16 +149,16 @@ func (h *InspectionReportHandler) GetMapData(c *fiber.Ctx) error {
 	role, ok2 := c.Locals("role").(string)
 
 	if !ok1 || !ok2 {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid, harap login ulang"})
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid, harap login ulang", "")
 	}
 
 	// Masukkan userID dan role ke dalam pemanggilan Service
 	reports, err := h.service.GetMapData(c.Context(), userID, role)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil data peta spasial"})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil data peta spasial", err.Error())
 	}
 
-	return c.JSON(fiber.Map{"data": reports})
+	return utils.Success(c, fiber.StatusOK, "Data peta spasial berhasil diambil", reports)
 }
 
 func (h *InspectionReportHandler) ExportExcel(c *fiber.Ctx) error {
@@ -172,13 +167,13 @@ func (h *InspectionReportHandler) ExportExcel(c *fiber.Ctx) error {
 	role, ok2 := c.Locals("role").(string)
 
 	if !ok1 || !ok2 {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid"})
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid, harap login ulang", "")
 	}
 
 	// 2. Panggil Service untuk membuat Excel
 	fileBytes, fileName, err := h.service.ExportToExcel(c.Context(), userID, role)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengekspor data ke Excel", err.Error())
 	}
 
 	// 3. Atur Header HTTP agar browser/Flutter tahu ini adalah file unduhan

@@ -10,6 +10,7 @@ import (
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/handlers"
 	"github.com/ipincamp/radar-jentik-api/internal/adapters/driving/http/middleware"
 	"github.com/ipincamp/radar-jentik-api/pkg/config"
+	"github.com/ipincamp/radar-jentik-api/pkg/utils"
 )
 
 // Server struct bertindak sebagai Driving Adapter untuk HTTP
@@ -98,7 +99,7 @@ func (s *Server) setupRoutes() {
 
 // healthCheck handler untuk memastikan server berjalan dengan baik
 func (s *Server) healthCheck(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+	return utils.Success(c, fiber.StatusOK, "Server is running", nil)
 }
 
 // Start menjalankan server HTTP

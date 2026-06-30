@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
+	"github.com/ipincamp/radar-jentik-api/pkg/utils"
 )
 
 type IDWHandler struct {
@@ -19,14 +20,13 @@ func NewIDWHandler(idwService ports.IDWService, reportService ports.InspectionRe
 	}
 }
 
+// Fungsi untuk menghitung IDW berdasarkan data riil dari database
 func (h *IDWHandler) Calculate(c *fiber.Ctx) error {
 	var req domain.IDWRequest
 
 	// 1. Parsing Bounding Box (Batas Area) dari Flutter/Postman
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Format payload tidak valid",
-		})
+		return utils.Error(c, fiber.StatusBadRequest, "Format payload tidak valid", err.Error())
 	}
 
 	// 2. Ambil Sesi User (Role & ID) dari Middleware JWT
@@ -34,15 +34,13 @@ func (h *IDWHandler) Calculate(c *fiber.Ctx) error {
 	role, ok2 := c.Locals("role").(string)
 
 	if !ok1 || !ok2 {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid"})
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "User session is invalid")
 	}
 
 	// 3. Ambil Data Inspeksi Riil dari Database (Hanya yang 'accept')
 	reports, err := h.reportService.GetMapData(c.Context(), userID, role)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Gagal mengambil data laporan inspeksi",
-		})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil data laporan inspeksi", err.Error())
 	}
 
 	// 4. Transformasi Data Laporan menjadi Titik Sampel IDW
@@ -65,9 +63,7 @@ func (h *IDWHandler) Calculate(c *fiber.Ctx) error {
 
 	// Cek apakah ada data sampel di database
 	if len(samples) == 0 {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Belum ada data laporan inspeksi tervalidasi untuk area ini",
-		})
+		return utils.Error(c, fiber.StatusNotFound, "Belum ada data laporan inspeksi tervalidasi untuk area ini", "")
 	}
 
 	// Timpa req.Samples bawaan Postman dengan data riil dari database
@@ -89,25 +85,19 @@ func (h *IDWHandler) Calculate(c *fiber.Ctx) error {
 	// 5. Kalkulasi IDW menggunakan Service
 	gridResult, err := h.idwService.CalculateIDWGrid(c.Context(), req)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Gagal menghitung estimasi IDW",
-		})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal menghitung estimasi IDW", err.Error())
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Berhasil menghitung IDW berdasarkan data riil",
-		"data":    gridResult,
-	})
+	return utils.Success(c, fiber.StatusOK, "Berhasil menghitung IDW berdasarkan data riil", gridResult)
 }
 
+// Fungsi untuk memprediksi nilai IDW pada satu titik tertentu
 func (h *IDWHandler) PredictSinglePoint(c *fiber.Ctx) error {
 	var req domain.IDWPointRequest
 
 	// 1. Parsing koordinat dari Flutter
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Format payload tidak valid",
-		})
+		return utils.Error(c, fiber.StatusBadRequest, "Format payload tidak valid", err.Error())
 	}
 
 	// 2. Ambil Sesi User (Role & ID)
@@ -115,15 +105,13 @@ func (h *IDWHandler) PredictSinglePoint(c *fiber.Ctx) error {
 	role, ok2 := c.Locals("role").(string)
 
 	if !ok1 || !ok2 {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid"})
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "User session is invalid")
 	}
 
 	// 3. Ambil Data Inspeksi Riil dari Database
 	reports, err := h.reportService.GetMapData(c.Context(), userID, role)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Gagal mengambil data laporan inspeksi",
-		})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil data laporan inspeksi", err.Error())
 	}
 
 	// 4. Transformasi ke format titik sampel
@@ -141,9 +129,7 @@ func (h *IDWHandler) PredictSinglePoint(c *fiber.Ctx) error {
 	}
 
 	if len(samples) == 0 {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Belum ada data sampel dari kader",
-		})
+		return utils.Error(c, fiber.StatusNotFound, "Belum ada data sampel dari kader", "")
 	}
 
 	// 5. Kalkulasi Prediksi 1 Titik
@@ -158,13 +144,10 @@ func (h *IDWHandler) PredictSinglePoint(c *fiber.Ctx) error {
 		status = "Waspada"
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Berhasil memprediksi titik",
-		"data": fiber.Map{
-			"lat":    req.Lat,
-			"lon":    req.Lon,
-			"value":  estimatedValue,
-			"status": status,
-		},
+	return utils.Success(c, fiber.StatusOK, "Berhasil memprediksi titik", fiber.Map{
+		"lat":    req.Lat,
+		"lon":    req.Lon,
+		"value":  estimatedValue,
+		"status": status,
 	})
 }

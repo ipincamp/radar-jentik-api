@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
 	"github.com/ipincamp/radar-jentik-api/internal/core/ports"
+	"github.com/ipincamp/radar-jentik-api/pkg/utils"
 )
 
 type AuthHandler struct {
@@ -42,10 +43,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	req := new(RegisterRequest)
 
 	if err := c.BodyParser(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   "Format request tidak valid",
-			"details": err.Error(),
-		})
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
 	}
 
 	user := &domain.User{
@@ -57,19 +55,13 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	}
 
 	if err := h.authService.Register(c.Context(), user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Gagal mendaftarkan pengguna",
-			"details": err.Error(),
-		})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mendaftarkan pengguna", err.Error())
 	}
 
 	// Jangan kembalikan password di response
 	user.Password = ""
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Registrasi akun berhasil",
-		"data":    user,
-	})
+	return utils.Success(c, fiber.StatusCreated, "Registrasi akun berhasil", user)
 }
 
 // Fungsi Login
@@ -77,22 +69,17 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	req := new(LoginRequest)
 
 	if err := c.BodyParser(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Format request tidak valid",
-		})
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
 	}
 
 	token, role, err := h.authService.Login(c.Context(), req.Username, req.Password)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Username atau password salah",
-		})
+		return utils.Error(c, fiber.StatusUnauthorized, "Username atau password salah", err.Error())
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Login berhasil",
-		"token":   token,
-		"role":    role,
+	return utils.Success(c, fiber.StatusOK, "Login berhasil", fiber.Map{
+		"token": token,
+		"role":  role,
 	})
 }
 
@@ -101,16 +88,14 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	// Karena kita menggunakan JWT Stateless, logout biasanya dilakukan
 	// dengan cara menghapus token di sisi aplikasi Flutter.
 	// Endpoint ini hanya sebagai konfirmasi/formalitas.
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Logout berhasil",
-	})
+	return utils.Success(c, fiber.StatusOK, "Logout berhasil", nil)
 }
 
-// REVISI FUNGSI READ (LIST USERS)
+// Fungsi List Users (Hanya untuk role officer)
 func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
 	users, err := h.authService.GetAllUsers(c.Context())
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal mengambil data daftar kader"})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil data daftar kader", err.Error())
 	}
 
 	var response []fiber.Map
@@ -141,14 +126,14 @@ func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
 		response = []fiber.Map{}
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": response})
+	return utils.Success(c, fiber.StatusOK, "Data daftar kader berhasil diambil", response)
 }
 
-// FUNGSI CREATE USER (PETUGAS MEMBUAT KADER BARU)
+// Fungsi Create User (Hanya untuk role officer)
 func (h *AuthHandler) CreateUser(c *fiber.Ctx) error {
 	req := new(RegisterRequest)
 	if err := c.BodyParser(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Format request tidak valid"})
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
 	}
 
 	user := &domain.User{
@@ -160,19 +145,19 @@ func (h *AuthHandler) CreateUser(c *fiber.Ctx) error {
 	}
 
 	if err := h.authService.CreateUser(c.Context(), user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mendaftarkan pengguna", err.Error())
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Akun Kader berhasil dibuat"})
+	return utils.Success(c, fiber.StatusCreated, "Akun Kader berhasil dibuat", user)
 }
 
-// FUNGSI UPDATE USER
+// Fungsi Update User (Hanya untuk role officer)
 func (h *AuthHandler) UpdateUser(c *fiber.Ctx) error {
 	id := c.Params("id")
 	req := new(UpdateUserRequest)
 
 	if err := c.BodyParser(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Format request tidak valid"})
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
 	}
 
 	user := &domain.User{
@@ -183,19 +168,19 @@ func (h *AuthHandler) UpdateUser(c *fiber.Ctx) error {
 	}
 
 	if err := h.authService.UpdateUser(c.Context(), id, user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal memperbarui data kader", err.Error())
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Data Kader berhasil diperbarui"})
+	return utils.Success(c, fiber.StatusOK, "Data Kader berhasil diperbarui", user)
 }
 
-// FUNGSI DELETE USER
+// Fungsi Delete User (Hanya untuk role officer)
 func (h *AuthHandler) DeleteUser(c *fiber.Ctx) error {
 	id := c.Params("id")
 
 	if err := h.authService.DeleteUser(c.Context(), id); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal menghapus akun kader"})
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal menghapus akun kader", err.Error())
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Akun Kader berhasil dihapus"})
+	return utils.Success(c, fiber.StatusOK, "Akun Kader berhasil dihapus", nil)
 }
