@@ -66,7 +66,11 @@ func (r *UserRepo) Save(ctx context.Context, user *domain.User) error {
 	if err := r.db.WithContext(ctx).Create(userDB).Error; err != nil {
 		return err
 	}
+
 	user.ID = userDB.ID
+	user.CreatedAt = userDB.CreatedAt
+	user.UpdatedAt = userDB.UpdatedAt
+
 	return nil
 }
 
