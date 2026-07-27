@@ -101,6 +101,7 @@ func (s *Server) setupRoutes() {
 	reports.Put("/:id/validate", s.inspectionReportHandler.ValidateReport)
 	reports.Get("/map", s.inspectionReportHandler.GetMapData)
 	reports.Get("/export", s.inspectionReportHandler.ExportExcel)
+	reports.Put("/bulk-validate", s.inspectionReportHandler.BulkValidateReports)
 }
 
 // healthCheck handler untuk memastikan server berjalan dengan baik

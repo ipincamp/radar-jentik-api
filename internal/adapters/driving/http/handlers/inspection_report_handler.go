@@ -47,6 +47,12 @@ type BulkCreateReportRequest struct {
 	Reports []CreateReportRequest `json:"reports" validate:"required,dive"`
 }
 
+type BulkValidateRequest struct {
+	ReportIDs       []string `json:"report_ids" validate:"required,dive,required"`
+	Status          string   `json:"status" validate:"required,oneof=accept reject"`
+	RejectionReason *string  `json:"rejection_reason,omitempty"`
+}
+
 // ---------------------------------------------------------
 // 1. Fungsi Create (Untuk Form Laporan Kader)
 // ---------------------------------------------------------
@@ -298,4 +304,60 @@ func (h *InspectionReportHandler) CreateBulk(c *fiber.Ctx) error {
 	}
 
 	return utils.Success(c, fiber.StatusCreated, fmt.Sprintf("%d laporan berhasil disinkronisasi", len(domainReports)), nil)
+}
+
+// BulkValidateReports menangani proses validasi massal (Terima/Tolak) banyak laporan sekaligus
+func (h *InspectionReportHandler) BulkValidateReports(c *fiber.Ctx) error {
+	var req BulkValidateRequest
+
+	// 1. Parsing Body JSON ke Struct
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "Format request tidak valid",
+			"error":   err.Error(),
+		})
+	}
+
+	// (Opsional) 2. Validasi manual jika Anda tidak menggunakan library validator
+	if len(req.ReportIDs) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "report_ids tidak boleh kosong",
+		})
+	}
+	if req.Status != "accept" && req.Status != "reject" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "Status harus 'accept' atau 'reject'",
+		})
+	}
+
+	// 3. Persiapkan data yang akan di-update
+	updateData := map[string]interface{}{
+		"validation_status": req.Status,
+	}
+
+	// Jika statusnya reject, masukkan alasan. Jika accept, kosongkan alasan penolakan.
+	if req.Status == "reject" && req.RejectionReason != nil {
+		updateData["rejection_reason"] = *req.RejectionReason
+	} else if req.Status == "accept" {
+		updateData["rejection_reason"] = nil // Hapus alasan penolakan jika sebelumnya ada
+	}
+
+	// 4. Eksekusi Update Massal menggunakan GORM (WHERE id IN (...))
+	err := h.service.BulkValidateReports(c.Context(), req.ReportIDs, req.Status)
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "Gagal memperbarui status laporan",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success": true,
+		"message": fmt.Sprintf("%d laporan berhasil diperbarui statusnya menjadi '%s'", len(req.ReportIDs), req.Status),
+	})
 }

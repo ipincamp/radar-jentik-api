@@ -408,3 +408,12 @@ func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports 
 
 	return s.repo.CreateBulk(ctx, reports)
 }
+
+// BulkValidateReports bertugas memvalidasi banyak laporan sekaligus (accept/reject) berdasarkan ID yang diberikan.
+func (s *inspectionReportService) BulkValidateReports(ctx context.Context, reportIDs []string, status string) error {
+	if status != "accept" && status != "reject" {
+		return errors.New("status validasi tidak dikenali")
+	}
+
+	return s.repo.BulkValidateReports(ctx, reportIDs, status)
+}
