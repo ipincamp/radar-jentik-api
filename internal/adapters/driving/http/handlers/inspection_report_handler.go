@@ -30,7 +30,7 @@ type CreateReportRequest struct {
 	FamilyHeadName string               `json:"family_head_name"`
 	Latitude       float64              `json:"latitude" validate:"required"`
 	Longitude      float64              `json:"longitude" validate:"required"`
-	PhotoURL       string               `json:"photo_url" validate:"required"`
+	PhotoURL       string               `json:"photo_url"`
 	InspectedAt    string               `json:"inspected_at"`
 	Containers     []ContainerDetailReq `json:"containers" validate:"required,dive"`
 	// LarvaeStatus   bool                 `json:"larvae_status"`

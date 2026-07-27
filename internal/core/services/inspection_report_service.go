@@ -28,9 +28,9 @@ func NewInspectionReportService(repo ports.InspectionReportRepository, villageRe
 // CreateReport bertugas memproses payload dan memvalidasi aturan bisnis
 func (s *inspectionReportService) CreateReport(ctx context.Context, report *domain.InspectionReport) error {
 	// Validasi input
-	if report.PhotoURL == "" {
-		return errors.New("foto bukti inspeksi lapangan wajib disertakan")
-	}
+	// if report.PhotoURL == "" {
+	// 	return errors.New("foto bukti inspeksi lapangan wajib disertakan")
+	// }
 	// Validasi minimal harus melaporkan satu jenis wadah
 	if len(report.ContainerDetails) == 0 {
 		return errors.New("minimal harus melaporkan satu jenis wadah")
@@ -374,9 +374,9 @@ func (s *inspectionReportService) GetPaginatedPending(ctx context.Context, page,
 // Fungsi CreateBulkReport bertugas memproses beberapa laporan sekaligus, dengan validasi yang sama seperti CreateReport.
 func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports []*domain.InspectionReport) error {
 	for i, report := range reports {
-		if report.PhotoURL == "" {
-			return fmt.Errorf("laporan ke-%d: foto bukti wajib disertakan", i+1)
-		}
+		// if report.PhotoURL == "" {
+		// 	return fmt.Errorf("laporan ke-%d: foto bukti wajib disertakan", i+1)
+		// }
 		if len(report.ContainerDetails) == 0 {
 			return fmt.Errorf("laporan ke-%d: minimal harus melaporkan satu jenis wadah", i+1)
 		}
