@@ -344,7 +344,7 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 }
 
 // History
-func (s *inspectionReportService) GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.InspectionReport, int64, error) {
+func (s *inspectionReportService) GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -354,7 +354,7 @@ func (s *inspectionReportService) GetPaginatedHistory(ctx context.Context, userI
 	if limit > 100 {
 		limit = 100
 	}
-	return s.repo.GetPaginatedHistory(ctx, userID, page, limit)
+	return s.repo.GetPaginatedHistory(ctx, userID, page, limit, search, rt, rw, villageID, date)
 }
 
 // Pending

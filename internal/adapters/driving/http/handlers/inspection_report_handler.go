@@ -118,12 +118,18 @@ func (h *InspectionReportHandler) GetHistory(c *fiber.Ctx) error {
 		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid, harap login ulang", "")
 	}
 
-	// 2. Tangkap parameter pagination dari URL (Default: page 1, limit 10)
+	// 2. Tangkap parameter pagination dan filter dari URL
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 10)
 
-	// 3. Panggil Service versi Paginated
-	reports, totalData, err := h.service.GetPaginatedHistory(c.Context(), userID, page, limit)
+	search := c.Query("search")
+	rt := c.Query("rt")
+	rw := c.Query("rw")
+	villageID := c.Query("village_id")
+	date := c.Query("date")
+
+	// 3. Panggil Service versi Paginated dengan filter
+	reports, totalData, err := h.service.GetPaginatedHistory(c.Context(), userID, page, limit, search, rt, rw, villageID, date)
 	if err != nil {
 		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengambil riwayat laporan", err.Error())
 	}

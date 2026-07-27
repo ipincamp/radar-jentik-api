@@ -180,25 +180,45 @@ func (r *inspectionReportRepository) GetExportData(ctx context.Context, userID, 
 	return reports, err
 }
 
-// Ambil Riwayat Laporan Milik 1 Kader (Paginated)
-func (r *inspectionReportRepository) GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.InspectionReport, int64, error) {
+// Ambil Riwayat Laporan Milik 1 Kader (Paginated dengan Filter)
+func (r *inspectionReportRepository) GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error) {
 	var reports []domain.InspectionReport
 	var totalData int64
 
 	// Base Query: Hanya laporan milik kader ini
 	baseQuery := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("user_id = ?", userID)
 
-	// Hitung total data
+	// FILTER
+	if search != "" {
+		// Menggunakan ILIKE untuk case-insensitive di PostgreSQL
+		baseQuery = baseQuery.Where("family_head_name ILIKE ?", "%"+search+"%")
+	}
+	if rt != "" {
+		baseQuery = baseQuery.Where("rt = ?", rt)
+	}
+	if rw != "" {
+		baseQuery = baseQuery.Where("rw = ?", rw)
+	}
+	if villageID != "" {
+		baseQuery = baseQuery.Where("village_id = ?", villageID)
+	}
+	if date != "" {
+		// Mengambil laporan berdasarkan tanggal (mengabaikan jam)
+		baseQuery = baseQuery.Where("DATE(inspected_at) = ?", date)
+	}
+
+	// Hitung total data (setelah filter diterapkan)
 	if err := baseQuery.Count(&totalData).Error; err != nil {
 		return nil, 0, err
 	}
+
 	if totalData == 0 {
 		return []domain.InspectionReport{}, 0, nil
 	}
 
 	offset := (page - 1) * limit
 
-	// Ambil data (Urutkan dari yang paling baru dikirim / DESC)
+	// Ambil data
 	err := baseQuery.
 		Preload("Village").
 		Preload("ContainerDetails.ContainerType").

@@ -14,7 +14,7 @@ type InspectionReportRepository interface {
 	GetValidReports(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
 	GetRecapData(ctx context.Context, userID, role string) ([]domain.ReportRecap, error)
 	GetExportData(ctx context.Context, userID, role string) ([]domain.InspectionReport, error)
-	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.InspectionReport, int64, error)
+	GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error)
 	GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error)
 	CreateBulk(ctx context.Context, reports []*domain.InspectionReport) error
 	BulkValidateReports(ctx context.Context, reportIDs []string, status string) error
@@ -28,7 +28,7 @@ type InspectionReportService interface {
 	GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error)
 	ExportToExcel(ctx context.Context, userID, role string) ([]byte, string, error)
 	UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error
-	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.InspectionReport, int64, error)
+	GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error)
 	GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error)
 	CreateBulkReport(ctx context.Context, reports []*domain.InspectionReport) error
 	BulkValidateReports(ctx context.Context, reportIDs []string, status string) error
