@@ -186,7 +186,7 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		f.SetCellValue(sheetName, "D7", "RT")
 		f.MergeCell(sheetName, "D7", "D8")
 
-		f.SetCellValue(sheetName, "E7", "Waktu Diterima")
+		f.SetCellValue(sheetName, "E7", "Waktu Inspeksi")
 		f.MergeCell(sheetName, "E7", "E8")
 
 		f.SetCellValue(sheetName, "F7", "Latitude")
