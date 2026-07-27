@@ -417,3 +417,31 @@ func (s *inspectionReportService) BulkValidateReports(ctx context.Context, repor
 
 	return s.repo.BulkValidateReports(ctx, reportIDs, status)
 }
+
+func (s *inspectionReportService) UpdateReport(ctx context.Context, reportID string, report *domain.InspectionReport) error {
+	if len(report.ContainerDetails) == 0 {
+		return errors.New("minimal harus melaporkan satu jenis wadah")
+	}
+
+	if report.VillageID == "" {
+		village, err := s.villageRepo.GetByCoordinate(ctx, report.Latitude, report.Longitude)
+		if err != nil {
+			return errors.New("lokasi anda berada di luar wilayah, silakan pilih desa secara manual")
+		}
+		report.VillageID = village.ID
+	}
+
+	report.LarvaeStatus = 0
+	for _, container := range report.ContainerDetails {
+		if container.PositiveCount > 0 {
+			report.LarvaeStatus = 1
+			break
+		}
+	}
+
+	if report.InspectedAt.IsZero() {
+		report.InspectedAt = time.Now()
+	}
+
+	return s.repo.Update(ctx, reportID, report)
+}

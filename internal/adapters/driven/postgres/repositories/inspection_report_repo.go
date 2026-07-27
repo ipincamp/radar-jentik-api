@@ -304,3 +304,48 @@ func (r *inspectionReportRepository) BulkValidateReports(ctx context.Context, re
 
 	return result.Error
 }
+
+func (r *inspectionReportRepository) Update(ctx context.Context, reportID string, report *domain.InspectionReport) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. Hapus detail wadah lama agar tidak menumpuk
+		if err := tx.Where("inspection_report_id = ?", reportID).Delete(&domain.ContainerDetail{}).Error; err != nil {
+			return err
+		}
+
+		// 2. Update data induk (gunakan map agar GORM memperbarui nilai 0 atau string kosong)
+		updateData := map[string]interface{}{
+			"village_id":        report.VillageID,
+			"rt":                report.RT,
+			"rw":                report.RW,
+			"family_head_name":  report.FamilyHeadName,
+			"latitude":          report.Latitude,
+			"longitude":         report.Longitude,
+			"larvae_status":     report.LarvaeStatus,
+			"photo_url":         report.PhotoURL,
+			"inspected_at":      report.InspectedAt,
+			"validation_status": "pending", // Reset status menjadi pending setiap kali diedit
+		}
+
+		if err := tx.Model(&domain.InspectionReport{}).Where("id = ?", reportID).Updates(updateData).Error; err != nil {
+			return err
+		}
+
+		// 3. Update spatial point PostGIS
+		geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?::float, ?::float), 4326)", report.Longitude, report.Latitude)
+		if err := tx.Model(&domain.InspectionReport{}).Where("id = ?", reportID).Update("geom", geomExpr).Error; err != nil {
+			return err
+		}
+
+		// 4. Masukkan wadah baru yang diedit
+		for i := range report.ContainerDetails {
+			report.ContainerDetails[i].InspectionReportID = reportID
+		}
+		if len(report.ContainerDetails) > 0 {
+			if err := tx.Create(&report.ContainerDetails).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}

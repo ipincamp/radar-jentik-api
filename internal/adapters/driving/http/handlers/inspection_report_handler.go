@@ -367,3 +367,49 @@ func (h *InspectionReportHandler) BulkValidateReports(c *fiber.Ctx) error {
 		"message": fmt.Sprintf("%d laporan berhasil diperbarui statusnya menjadi '%s'", len(req.ReportIDs), req.Status),
 	})
 }
+
+// 8. Fungsi UpdateReport (Untuk Mengedit Laporan Kader)
+func (h *InspectionReportHandler) UpdateReport(c *fiber.Ctx) error {
+	reportID := c.Params("id")
+
+	// Kita bisa meminjam DTO Create karena format body JSON-nya persis sama
+	req := new(CreateReportRequest)
+	if err := c.BodyParser(req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
+	}
+
+	userID, _ := c.Locals("user_id").(string)
+
+	report := &domain.InspectionReport{
+		UserID:         userID,
+		VillageID:      req.VillageID,
+		RT:             req.RT,
+		RW:             req.RW,
+		FamilyHeadName: req.FamilyHeadName,
+		Latitude:       req.Latitude,
+		Longitude:      req.Longitude,
+		PhotoURL:       req.PhotoURL,
+	}
+
+	if req.InspectedAt != "" {
+		parsedTime, err := time.Parse(time.RFC3339, req.InspectedAt)
+		if err == nil {
+			report.InspectedAt = parsedTime
+		}
+	}
+
+	for _, cReq := range req.Containers {
+		report.ContainerDetails = append(report.ContainerDetails, domain.ContainerDetail{
+			ContainerTypeID: cReq.ContainerTypeID,
+			CustomName:      cReq.CustomName,
+			InspectedCount:  cReq.InspectedCount,
+			PositiveCount:   cReq.PositiveCount,
+		})
+	}
+
+	if err := h.service.UpdateReport(c.Context(), reportID, report); err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal memperbarui laporan", err.Error())
+	}
+
+	return utils.Success(c, fiber.StatusOK, "Laporan berhasil diperbarui", nil)
+}
