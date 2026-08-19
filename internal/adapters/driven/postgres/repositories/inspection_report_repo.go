@@ -291,16 +291,22 @@ func (r *inspectionReportRepository) CreateBulk(ctx context.Context, reports []*
 }
 
 // BulkValidateReports bertugas memvalidasi banyak laporan sekaligus (accept/reject) berdasarkan ID yang diberikan.
-func (r *inspectionReportRepository) BulkValidateReports(ctx context.Context, reportIDs []string, status string) error {
+func (r *inspectionReportRepository) BulkValidateReports(ctx context.Context, reportIDs []string, status string, rejectionReason *string) error {
 	// Validasi status yang diterima
 	if status != "accept" && status != "reject" {
 		return errors.New("status validasi tidak dikenali")
 	}
 
+	// Persiapkan data untuk di-update
+	updateData := map[string]interface{}{
+		"validation_status": status,
+		"rejection_reason":  rejectionReason,
+	}
+
 	// Update banyak laporan sekaligus menggunakan WHERE id IN (...)
 	result := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).
 		Where("id IN ?", reportIDs).
-		Update("validation_status", status)
+		Updates(updateData) // Ganti Update() menjadi Updates()
 
 	return result.Error
 }

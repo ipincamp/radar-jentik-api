@@ -17,7 +17,7 @@ type InspectionReportRepository interface {
 	GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error)
 	GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error)
 	CreateBulk(ctx context.Context, reports []*domain.InspectionReport) error
-	BulkValidateReports(ctx context.Context, reportIDs []string, status string) error
+	BulkValidateReports(ctx context.Context, reportIDs []string, status string, rejectionReason *string) error
 	Update(ctx context.Context, reportID string, report *domain.InspectionReport) error
 }
 
@@ -32,6 +32,6 @@ type InspectionReportService interface {
 	GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error)
 	GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error)
 	CreateBulkReport(ctx context.Context, reports []*domain.InspectionReport) error
-	BulkValidateReports(ctx context.Context, reportIDs []string, status string) error
+	BulkValidateReports(ctx context.Context, reportIDs []string, status string, rejectionReason *string) error
 	UpdateReport(ctx context.Context, reportID string, report *domain.InspectionReport) error
 }

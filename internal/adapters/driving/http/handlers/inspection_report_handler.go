@@ -315,7 +315,6 @@ func (h *InspectionReportHandler) CreateBulk(c *fiber.Ctx) error {
 // BulkValidateReports menangani proses validasi massal (Terima/Tolak) banyak laporan sekaligus
 func (h *InspectionReportHandler) BulkValidateReports(c *fiber.Ctx) error {
 	var req BulkValidateRequest
-
 	// 1. Parsing Body JSON ke Struct
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -325,7 +324,7 @@ func (h *InspectionReportHandler) BulkValidateReports(c *fiber.Ctx) error {
 		})
 	}
 
-	// (Opsional) 2. Validasi manual jika Anda tidak menggunakan library validator
+	// 2. Validasi manual
 	if len(req.ReportIDs) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
@@ -339,21 +338,9 @@ func (h *InspectionReportHandler) BulkValidateReports(c *fiber.Ctx) error {
 		})
 	}
 
-	// 3. Persiapkan data yang akan di-update
-	updateData := map[string]interface{}{
-		"validation_status": req.Status,
-	}
-
-	// Jika statusnya reject, masukkan alasan. Jika accept, kosongkan alasan penolakan.
-	if req.Status == "reject" && req.RejectionReason != nil {
-		updateData["rejection_reason"] = *req.RejectionReason
-	} else if req.Status == "accept" {
-		updateData["rejection_reason"] = nil // Hapus alasan penolakan jika sebelumnya ada
-	}
-
-	// 4. Eksekusi Update Massal menggunakan GORM (WHERE id IN (...))
-	err := h.service.BulkValidateReports(c.Context(), req.ReportIDs, req.Status)
-
+	// Hapus blok pembuatan `updateData` di sini.
+	// Langsung eksekusi Update Massal dengan melempar req.RejectionReason
+	err := h.service.BulkValidateReports(c.Context(), req.ReportIDs, req.Status, req.RejectionReason)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
