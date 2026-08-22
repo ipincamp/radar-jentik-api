@@ -297,16 +297,22 @@ func (r *inspectionReportRepository) BulkValidateReports(ctx context.Context, re
 		return errors.New("status validasi tidak dikenali")
 	}
 
-	// Persiapkan data untuk di-update
+	// 1. Inisiasi map hanya dengan status
 	updateData := map[string]interface{}{
 		"validation_status": status,
-		"rejection_reason":  rejectionReason,
 	}
 
-	// Update banyak laporan sekaligus menggunakan WHERE id IN (...)
+	// 2. Cek dan bongkar pointer secara manual
+	if rejectionReason != nil {
+		updateData["rejection_reason"] = *rejectionReason // Ambil nilai string-nya
+	} else {
+		updateData["rejection_reason"] = nil // Gunakan nil murni (untyped nil) agar jadi NULL di database
+	}
+
+	// 3. Eksekusi update
 	result := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).
 		Where("id IN ?", reportIDs).
-		Updates(updateData) // Ganti Update() menjadi Updates()
+		Updates(updateData)
 
 	return result.Error
 }
