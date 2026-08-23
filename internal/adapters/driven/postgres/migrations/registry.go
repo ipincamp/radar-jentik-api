@@ -11,5 +11,6 @@ func GetMigrations() []*gormigrate.Migration {
 		CreateContainerTypesTable(),
 		CreateInspectionReportsTable(),
 		CreateContainerDetailsTable(),
+		CreateMalariaSurveysTable(),
 	}
 }
