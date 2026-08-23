@@ -8,8 +8,10 @@ import (
 
 type MalariaSurveyRepository interface {
 	Create(ctx context.Context, survey *domain.MalariaSurvey) error
+	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.MalariaSurvey, int64, error)
 }
 
 type MalariaSurveyService interface {
 	CreateSurvey(ctx context.Context, survey *domain.MalariaSurvey) error
+	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.MalariaSurvey, int64, error)
 }

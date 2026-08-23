@@ -32,3 +32,18 @@ func (r *malariaSurveyRepository) Create(ctx context.Context, survey *domain.Mal
 		return nil
 	})
 }
+
+func (r *malariaSurveyRepository) GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.MalariaSurvey, int64, error) {
+	var surveys []domain.MalariaSurvey
+	var totalData int64
+
+	baseQuery := r.db.WithContext(ctx).Model(&domain.MalariaSurvey{}).Where("user_id = ?", userID)
+	if err := baseQuery.Count(&totalData).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := baseQuery.Preload("Village").Order("inspected_at DESC").Limit(limit).Offset(offset).Find(&surveys).Error
+
+	return surveys, totalData, err
+}

@@ -109,6 +109,7 @@ func (s *Server) setupRoutes() {
 
 	surveys := api.Group("/malaria-surveys", middleware.Protected(s.config))
 	surveys.Post("/", s.malariaSurveyHandler.Create)
+	surveys.Get("/history", s.malariaSurveyHandler.GetHistory)
 }
 
 // healthCheck handler untuk memastikan server berjalan dengan baik

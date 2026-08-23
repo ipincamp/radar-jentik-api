@@ -52,3 +52,13 @@ func (s *malariaSurveyService) CreateSurvey(ctx context.Context, survey *domain.
 
 	return s.repo.Create(ctx, survey)
 }
+
+func (s *malariaSurveyService) GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.MalariaSurvey, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	return s.repo.GetPaginatedHistory(ctx, userID, page, limit)
+}
