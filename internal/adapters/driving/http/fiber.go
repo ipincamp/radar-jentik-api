@@ -98,11 +98,11 @@ func (s *Server) setupRoutes() {
 	reports.Post("/bulk", s.inspectionReportHandler.CreateBulk)
 	reports.Get("/history", s.inspectionReportHandler.GetHistory)
 	reports.Get("/pending", s.inspectionReportHandler.GetPending)
-	reports.Put("/:id", s.inspectionReportHandler.UpdateReport)
-	reports.Put("/:id/validate", s.inspectionReportHandler.ValidateReport)
 	reports.Get("/map", s.inspectionReportHandler.GetMapData)
 	reports.Get("/export", s.inspectionReportHandler.ExportExcel)
 	reports.Put("/bulk-validate", s.inspectionReportHandler.BulkValidateReports)
+	reports.Put("/:id", s.inspectionReportHandler.UpdateReport)
+	reports.Put("/:id/validate", s.inspectionReportHandler.ValidateReport)
 }
 
 // healthCheck handler untuk memastikan server berjalan dengan baik
