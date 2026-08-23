@@ -62,3 +62,23 @@ func (s *malariaSurveyService) GetPaginatedHistory(ctx context.Context, userID s
 	}
 	return s.repo.GetPaginatedHistory(ctx, userID, page, limit)
 }
+
+func (s *malariaSurveyService) UpdateSurvey(ctx context.Context, id string, survey *domain.MalariaSurvey) error {
+	// Hitung ulang kepadatan larva
+	if survey.IsLarvaeFound {
+		if survey.ScoopCount > 0 {
+			survey.LarvaeDensity = float64(survey.LarvaeCount) / float64(survey.ScoopCount)
+		}
+	} else {
+		survey.LarvaeSpecies = ""
+		survey.ScoopCount = 0
+		survey.LarvaeCount = 0
+		survey.LarvaeDensity = 0
+	}
+
+	if survey.InspectedAt.IsZero() {
+		survey.InspectedAt = time.Now()
+	}
+
+	return s.repo.Update(ctx, id, survey)
+}

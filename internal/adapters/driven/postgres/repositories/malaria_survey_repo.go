@@ -47,3 +47,45 @@ func (r *malariaSurveyRepository) GetPaginatedHistory(ctx context.Context, userI
 
 	return surveys, totalData, err
 }
+
+func (r *malariaSurveyRepository) Update(ctx context.Context, id string, survey *domain.MalariaSurvey) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Update data induk menggunakan map agar nilai 0 / boolean false tetap terupdate
+		updateData := map[string]interface{}{
+			"village_id":          survey.VillageID,
+			"dusun":               survey.Dusun,
+			"rt":                  survey.RT,
+			"rw":                  survey.RW,
+			"latitude":            survey.Latitude,
+			"longitude":           survey.Longitude,
+			"breeding_place_type": survey.BreedingPlaceType,
+			"physical_lighting":   survey.PhysicalLighting,
+			"physical_water_flow": survey.PhysicalWaterFlow,
+			"bio_plants":          survey.BioPlants,
+			"bio_animals":         survey.BioAnimals,
+			"chem_salinity":       survey.ChemSalinity,
+			"chem_ph":             survey.ChemPH,
+			"chem_water_temp":     survey.ChemWaterTemp,
+			"area":                survey.Area,
+			"depth":               survey.Depth,
+			"is_larvae_found":     survey.IsLarvaeFound,
+			"larvae_species":      survey.LarvaeSpecies,
+			"scoop_count":         survey.ScoopCount,
+			"larvae_count":        survey.LarvaeCount,
+			"larvae_density":      survey.LarvaeDensity,
+			"inspected_at":        survey.InspectedAt,
+		}
+
+		if err := tx.Model(&domain.MalariaSurvey{}).Where("id = ?", id).Updates(updateData).Error; err != nil {
+			return err
+		}
+
+		// Update kolom geometri PostGIS
+		geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?::float, ?::float), 4326)", survey.Longitude, survey.Latitude)
+		if err := tx.Model(&domain.MalariaSurvey{}).Where("id = ?", id).Update("geom", geomExpr).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}

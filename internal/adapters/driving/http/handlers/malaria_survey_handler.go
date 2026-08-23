@@ -117,3 +117,48 @@ func (h *MalariaSurveyHandler) GetHistory(c *fiber.Ctx) error {
 
 	return utils.Paginated(c, fiber.StatusOK, "Riwayat malaria berhasil diambil", surveys, meta)
 }
+
+func (h *MalariaSurveyHandler) Update(c *fiber.Ctx) error {
+	id := c.Params("id")
+	req := new(CreateMalariaSurveyRequest) // Gunakan ulang DTO Create
+
+	if err := c.BodyParser(req); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "Format request tidak valid", err.Error())
+	}
+
+	survey := &domain.MalariaSurvey{
+		VillageID:         req.VillageID,
+		Dusun:             req.Dusun,
+		RT:                req.RT,
+		RW:                req.RW,
+		Latitude:          req.Latitude,
+		Longitude:         req.Longitude,
+		BreedingPlaceType: req.BreedingPlaceType,
+		PhysicalLighting:  req.PhysicalLighting,
+		PhysicalWaterFlow: req.PhysicalWaterFlow,
+		BioPlants:         req.BioPlants,
+		BioAnimals:        req.BioAnimals,
+		ChemSalinity:      req.ChemSalinity,
+		ChemPH:            req.ChemPH,
+		ChemWaterTemp:     req.ChemWaterTemp,
+		Area:              req.Area,
+		Depth:             req.Depth,
+		IsLarvaeFound:     req.IsLarvaeFound,
+		LarvaeSpecies:     req.LarvaeSpecies,
+		ScoopCount:        req.ScoopCount,
+		LarvaeCount:       req.LarvaeCount,
+	}
+
+	if req.InspectedAt != "" {
+		parsedTime, err := time.Parse(time.RFC3339, req.InspectedAt)
+		if err == nil {
+			survey.InspectedAt = parsedTime
+		}
+	}
+
+	if err := h.service.UpdateSurvey(c.Context(), id, survey); err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal memperbarui survei malaria", err.Error())
+	}
+
+	return utils.Success(c, fiber.StatusOK, "Survei malaria berhasil diperbarui", nil)
+}
