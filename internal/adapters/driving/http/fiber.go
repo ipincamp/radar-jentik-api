@@ -23,6 +23,7 @@ type Server struct {
 	idwHandler              *handlers.IDWHandler
 	containerTypeHandler    *handlers.ContainerTypeHandler
 	uploadHandler           *handlers.UploadHandler
+	malariaSurveyHandler    *handlers.MalariaSurveyHandler
 }
 
 // Tambahkan argument baru di NewServer
@@ -34,6 +35,7 @@ func NewServer(
 	idwH *handlers.IDWHandler,
 	containerTypeH *handlers.ContainerTypeHandler,
 	uploadH *handlers.UploadHandler,
+	malariaSurveyH *handlers.MalariaSurveyHandler,
 ) *Server {
 	app := fiber.New(fiber.Config{AppName: "Radar Jentik API"})
 
@@ -54,6 +56,7 @@ func NewServer(
 		idwHandler:              idwH,
 		containerTypeHandler:    containerTypeH,
 		uploadHandler:           uploadH,
+		malariaSurveyHandler:    malariaSurveyH,
 	}
 
 	// Setup Routes
@@ -103,6 +106,9 @@ func (s *Server) setupRoutes() {
 	reports.Put("/bulk-validate", s.inspectionReportHandler.BulkValidateReports)
 	reports.Put("/:id", s.inspectionReportHandler.UpdateReport)
 	reports.Put("/:id/validate", s.inspectionReportHandler.ValidateReport)
+
+	surveys := api.Group("/malaria-surveys", middleware.Protected(s.config))
+	surveys.Post("/", s.malariaSurveyHandler.Create)
 }
 
 // healthCheck handler untuk memastikan server berjalan dengan baik
