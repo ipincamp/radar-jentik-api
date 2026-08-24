@@ -111,6 +111,7 @@ func (s *Server) setupRoutes() {
 	surveys.Post("/", s.malariaSurveyHandler.Create)
 	surveys.Get("/history", s.malariaSurveyHandler.GetHistory)
 	surveys.Put("/:id", s.malariaSurveyHandler.Update)
+	surveys.Get("/export", s.malariaSurveyHandler.ExportExcel)
 }
 
 // healthCheck handler untuk memastikan server berjalan dengan baik

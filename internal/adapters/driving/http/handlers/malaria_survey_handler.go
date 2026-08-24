@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"math"
 	"time"
 
@@ -161,4 +162,21 @@ func (h *MalariaSurveyHandler) Update(c *fiber.Ctx) error {
 	}
 
 	return utils.Success(c, fiber.StatusOK, "Survei malaria berhasil diperbarui", nil)
+}
+
+func (h *MalariaSurveyHandler) ExportExcel(c *fiber.Ctx) error {
+	userID, ok1 := c.Locals("user_id").(string)
+	role, ok2 := c.Locals("role").(string)
+	if !ok1 || !ok2 {
+		return utils.Error(c, fiber.StatusUnauthorized, "Sesi tidak valid", "")
+	}
+
+	fileBytes, fileName, err := h.service.ExportToExcel(c.Context(), userID, role)
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, "Gagal mengekspor data ke Excel", err.Error())
+	}
+
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+	c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	return c.Send(fileBytes)
 }

@@ -89,3 +89,19 @@ func (r *malariaSurveyRepository) Update(ctx context.Context, id string, survey 
 		return nil
 	})
 }
+
+func (r *malariaSurveyRepository) GetExportData(ctx context.Context, userID, role string) ([]domain.MalariaSurvey, error) {
+	var surveys []domain.MalariaSurvey
+	query := r.db.WithContext(ctx).Preload("Village")
+
+	// Restriksi jika kader yang mengunduh (hanya desa miliknya)
+	if role == "cadre" {
+		query = query.Where("village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
+	}
+
+	err := query.Joins("JOIN villages ON villages.id = malaria_surveys.village_id").
+		Order("villages.name ASC, malaria_surveys.inspected_at DESC").
+		Find(&surveys).Error
+
+	return surveys, err
+}

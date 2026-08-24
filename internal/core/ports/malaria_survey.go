@@ -10,10 +10,12 @@ type MalariaSurveyRepository interface {
 	Create(ctx context.Context, survey *domain.MalariaSurvey) error
 	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.MalariaSurvey, int64, error)
 	Update(ctx context.Context, id string, survey *domain.MalariaSurvey) error
+	GetExportData(ctx context.Context, userID, role string) ([]domain.MalariaSurvey, error)
 }
 
 type MalariaSurveyService interface {
 	CreateSurvey(ctx context.Context, survey *domain.MalariaSurvey) error
 	GetPaginatedHistory(ctx context.Context, userID string, page, limit int) ([]domain.MalariaSurvey, int64, error)
 	UpdateSurvey(ctx context.Context, id string, survey *domain.MalariaSurvey) error
+	ExportToExcel(ctx context.Context, userID, role string) ([]byte, string, error)
 }
