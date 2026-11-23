@@ -70,18 +70,18 @@ func (r *inspectionReportRepository) GetValidReports(ctx context.Context, userID
 
 	query := r.db.WithContext(ctx).
 		Select(
-			"inspection_reports.id",
-			"inspection_reports.village_id",
-			"inspection_reports.rt",
-			"inspection_reports.rw",
-			"inspection_reports.family_head_name",
-			"inspection_reports.latitude",
-			"inspection_reports.longitude",
-			"inspection_reports.larvae_status",
-			"inspection_reports.inspected_at",
+			"id",
+			"village_id",
+			"rt",
+			"rw",
+			"family_head_name",
+			"latitude",
+			"longitude",
+			"larvae_status",
+			"inspected_at",
 		).
-		Joins("Village").
-		Where("inspection_reports.validation_status = ?", "accept")
+		Preload("Village").
+		Where("validation_status = ?", "accept")
 
 	if role == "cadre" {
 		query = query.Where("inspection_reports.village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
@@ -190,16 +190,16 @@ func (r *inspectionReportRepository) GetExportData(ctx context.Context, userID, 
 	var reports []domain.InspectionReport
 
 	query := r.db.WithContext(ctx).
-		Joins("Village").
+		Preload("Village").
 		Preload("ContainerDetails.ContainerType").
-		Where("inspection_reports.validation_status = ?", "accept")
+		Where("validation_status = ?", "accept")
 
 	if role == "cadre" {
-		query = query.Where("inspection_reports.village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
+		query = query.Where("village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
 	}
 
-	err := query.
-		Order(`"Village".name ASC, inspection_reports.rw ASC, inspection_reports.rt ASC`).
+	err := query.Joins("JOIN villages ON villages.id = inspection_reports.village_id").
+		Order("villages.name ASC, inspection_reports.rw ASC, inspection_reports.rt ASC").
 		Find(&reports).Error
 
 	return reports, err
@@ -239,7 +239,7 @@ func (r *inspectionReportRepository) GetPaginatedHistory(ctx context.Context, us
 	offset := (page - 1) * limit
 
 	err := baseQuery.
-		Joins("Village").
+		Preload("Village").
 		Preload("ContainerDetails.ContainerType").
 		Order("inspection_reports.created_at DESC").
 		Limit(limit).
@@ -269,8 +269,8 @@ func (r *inspectionReportRepository) GetPaginatedPending(ctx context.Context, pa
 	offset := (page - 1) * limit
 
 	err := baseQuery.
-		Joins("User").
-		Joins("Village").
+		Preload("User").
+		Preload("Village").
 		Preload("ContainerDetails.ContainerType").
 		Order("inspection_reports.created_at ASC").
 		Limit(limit).
