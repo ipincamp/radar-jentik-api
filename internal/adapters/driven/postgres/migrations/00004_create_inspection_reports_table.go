@@ -41,6 +41,21 @@ func CreateInspectionReportsTable() *gormigrate.Migration {
 				return err
 			}
 
+			// Composite Index untuk Peta IDW, Rekapitulasi, & Export (filter validation_status + village_id)
+			if err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_inspection_reports_status_village_inspected ON inspection_reports (validation_status, village_id, inspected_at DESC) WHERE deleted_at IS NULL`).Error; err != nil {
+				return err
+			}
+
+			// Composite Index untuk Riwayat Kader (filter user_id + sorting created_at)
+			if err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_inspection_reports_user_created ON inspection_reports (user_id, created_at DESC) WHERE deleted_at IS NULL`).Error; err != nil {
+				return err
+			}
+
+			// Composite Index untuk Antrean Validasi Petugas
+			if err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_inspection_reports_pending_created ON inspection_reports (validation_status, created_at ASC) WHERE deleted_at IS NULL`).Error; err != nil {
+				return err
+			}
+
 			// Foreign Keys
 			tx.Exec(`ALTER TABLE inspection_reports ADD CONSTRAINT fk_report_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE`)
 			tx.Exec(`ALTER TABLE inspection_reports ADD CONSTRAINT fk_report_village FOREIGN KEY (village_id) REFERENCES villages(id) ON DELETE RESTRICT`)

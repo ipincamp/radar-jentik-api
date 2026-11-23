@@ -19,119 +19,146 @@ func NewInspectionReportRepository(db *gorm.DB) ports.InspectionReportRepository
 }
 
 func (r *inspectionReportRepository) Create(ctx context.Context, report *domain.InspectionReport) error {
-	// Memulai Transaksi Database
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-
-		// 1. GORM secara otomatis akan menyimpan 'report' (induk)
-		//    DAN data 'ContainerDetails' (anak) jika relasinya sudah di-set di struct.
-		//    Namun, kita mengecualikan kolom Geom karena butuh fungsi PostGIS khusus.
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Omit("Geom").Create(report).Error; err != nil {
-			// Jika error, transaksi otomatis di-rollback
 			return err
 		}
 
-		// 2. Update kolom 'geom' menggunakan fungsi spasial PostGIS ST_SetSRID dan ST_MakePoint.
-		//    Bujur (Longitude) adalah X, Lintang (Latitude) adalah Y.
 		geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?::float, ?::float), 4326)", report.Longitude, report.Latitude)
-
 		if err := tx.Model(report).Update("geom", geomExpr).Error; err != nil {
-			// Jika gagal update spasial, transaksi otomatis di-rollback
 			return err
 		}
 
-		// Jika sampai di sini, kembalikan nil untuk COMMIT transaksi
 		return nil
 	})
-
-	return err
 }
 
-// Ambil riwayat laporan milik kader tertentu
 func (r *inspectionReportRepository) GetByUserID(ctx context.Context, userID string) ([]domain.InspectionReport, error) {
 	var reports []domain.InspectionReport
-	// Preload digunakan untuk mengambil data wadah (anak) sekaligus
-	err := r.db.WithContext(ctx).Preload("ContainerDetails").Where("user_id = ?", userID).Order("inspected_at desc").Find(&reports).Error
+	err := r.db.WithContext(ctx).
+		Preload("ContainerDetails").
+		Where("user_id = ?", userID).
+		Order("inspected_at DESC").
+		Limit(500).
+		Find(&reports).Error
 	return reports, err
 }
 
-// Ambil semua laporan yang menunggu validasi petugas
 func (r *inspectionReportRepository) GetPending(ctx context.Context) ([]domain.InspectionReport, error) {
 	var reports []domain.InspectionReport
-	err := r.db.WithContext(ctx).Preload("ContainerDetails").Where("validation_status = ?", "pending").Order("inspected_at asc").Find(&reports).Error
+	err := r.db.WithContext(ctx).
+		Preload("ContainerDetails").
+		Where("validation_status = ?", "pending").
+		Order("inspected_at ASC").
+		Limit(500).
+		Find(&reports).Error
 	return reports, err
 }
 
-// Ubah status laporan (Terima/Tolak)
 func (r *inspectionReportRepository) UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error {
-	// Query UPDATE sekarang menyertakan rejection_reason
 	query := `
 		UPDATE inspection_reports 
 		SET validation_status = $1, rejection_reason = $2, updated_at = NOW() 
 		WHERE id = $3
 	`
-
-	tx := r.db.WithContext(ctx).Exec(query, status, rejectionReason, reportID)
-	return tx.Error
+	return r.db.WithContext(ctx).Exec(query, status, rejectionReason, reportID).Error
 }
 
-// Ambil data untuk Peta Zonasi IDW (Hanya yang berstatus 'accept')
+// Optimasi: Select kolom esensial saja (tanpa photo_url/metadata berat) & single JOIN Village
 func (r *inspectionReportRepository) GetValidReports(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error) {
 	var reports []domain.InspectionReport
 
-	query := r.db.WithContext(ctx).Preload("Village").Where("validation_status = ?", "accept")
+	query := r.db.WithContext(ctx).
+		Select(
+			"inspection_reports.id",
+			"inspection_reports.village_id",
+			"inspection_reports.rt",
+			"inspection_reports.rw",
+			"inspection_reports.family_head_name",
+			"inspection_reports.latitude",
+			"inspection_reports.longitude",
+			"inspection_reports.larvae_status",
+			"inspection_reports.inspected_at",
+		).
+		Joins("Village").
+		Where("inspection_reports.validation_status = ?", "accept")
 
-	// RESTRIKSI LINGKUP (ISOLASI DATA)
 	if role == "cadre" {
-		// Jika dia kader, filter laporan yang village_id-nya sama dengan village_id milik kader tersebut
-		query = query.Where("village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
+		query = query.Where("inspection_reports.village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
 	}
 
-	err := query.Order("inspected_at desc").Find(&reports).Error
+	err := query.Order("inspection_reports.inspected_at DESC").Find(&reports).Error
 	return reports, err
 }
 
+// Optimasi: Pisahkan agregasi rumah dan wadah agar tidak terjadi Cartesian product saat JOIN
 func (r *inspectionReportRepository) GetRecapData(ctx context.Context, userID, role string) ([]domain.ReportRecap, error) {
-	// PENTING: Perhatikan penambahan "LEFT JOIN container_types ct"
-	// dan perubahan cd.container_type menjadi ct.name
-	query := `
-		SELECT
-			ir.rt,
-			COUNT(DISTINCT ir.id) as rumah_diperiksa,
-			COUNT(DISTINCT CASE WHEN ir.larvae_status = 1 THEN ir.id END) as rumah_positif,
-			COALESCE(SUM(CASE WHEN ct.name = 'Bak Kamar Mandi' THEN cd.inspected_count ELSE 0 END), 0) as bak_mandi_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Bak Kamar Mandi' THEN cd.positive_count ELSE 0 END), 0) as bak_mandi_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Tempayan' THEN cd.inspected_count ELSE 0 END), 0) as tempayan_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Tempayan' THEN cd.positive_count ELSE 0 END), 0) as tempayan_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Pecahan Botol/Air Kemasan' THEN cd.inspected_count ELSE 0 END), 0) as pecahan_botol_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Pecahan Botol/Air Kemasan' THEN cd.positive_count ELSE 0 END), 0) as pecahan_botol_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Barang Bekas' THEN cd.inspected_count ELSE 0 END), 0) as barang_bekas_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Barang Bekas' THEN cd.positive_count ELSE 0 END), 0) as barang_bekas_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Kulkas/Dispenser' THEN cd.inspected_count ELSE 0 END), 0) as kulkas_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Kulkas/Dispenser' THEN cd.positive_count ELSE 0 END), 0) as kulkas_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Tandon Air' THEN cd.inspected_count ELSE 0 END), 0) as tandon_air_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Tandon Air' THEN cd.positive_count ELSE 0 END), 0) as tandon_air_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Vas Bunga' THEN cd.inspected_count ELSE 0 END), 0) as vas_bunga_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Vas Bunga' THEN cd.positive_count ELSE 0 END), 0) as vas_bunga_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Pot Bunga' THEN cd.inspected_count ELSE 0 END), 0) as pot_bunga_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Pot Bunga' THEN cd.positive_count ELSE 0 END), 0) as pot_bunga_pos,
-			COALESCE(SUM(CASE WHEN ct.name = 'Lain-lain' THEN cd.inspected_count ELSE 0 END), 0) as lain_lain_total,
-			COALESCE(SUM(CASE WHEN ct.name = 'Lain-lain' THEN cd.positive_count ELSE 0 END), 0) as lain_lain_pos,
-			COALESCE(SUM(cd.inspected_count), 0) as total_container,
-			COALESCE(SUM(cd.positive_count), 0) as total_container_pos
-		FROM inspection_reports ir
-		LEFT JOIN container_details cd ON ir.id = cd.inspection_report_id
-		LEFT JOIN container_types ct ON cd.container_type_id = ct.id
-		WHERE ir.validation_status = 'accept'
-	`
-	// Jika role adalah kader, batasi hanya melihat data miliknya
+	var filterClause string
 	var args []interface{}
+
 	if role == "cadre" {
-		query += " AND ir.user_id = $1"
+		filterClause = " AND ir.user_id = $1"
 		args = append(args, userID)
 	}
 
-	// Grouping berdasarkan RT dan urutkan
-	query += " GROUP BY ir.rt ORDER BY ir.rt ASC"
+	query := `
+		WITH filtered_reports AS (
+			SELECT id, rt, larvae_status
+			FROM inspection_reports ir
+			WHERE ir.validation_status = 'accept' AND ir.deleted_at IS NULL` + filterClause + `
+		),
+		house_stats AS (
+			SELECT
+				rt,
+				COUNT(*) AS rumah_diperiksa,
+				COUNT(*) FILTER (WHERE larvae_status = 1) AS rumah_positif
+			FROM filtered_reports
+			GROUP BY rt
+		),
+		container_stats AS (
+			SELECT
+				fr.rt,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Bak Kamar Mandi'), 0) AS bak_mandi_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Bak Kamar Mandi'), 0) AS bak_mandi_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Tempayan'), 0) AS tempayan_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Tempayan'), 0) AS tempayan_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Pecahan Botol/Air Kemasan'), 0) AS pecahan_botol_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Pecahan Botol/Air Kemasan'), 0) AS pecahan_botol_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Barang Bekas'), 0) AS barang_bekas_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Barang Bekas'), 0) AS barang_bekas_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Kulkas/Dispenser'), 0) AS kulkas_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Kulkas/Dispenser'), 0) AS kulkas_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Tandon Air'), 0) AS tandon_air_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Tandon Air'), 0) AS tandon_air_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Vas Bunga'), 0) AS vas_bunga_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Vas Bunga'), 0) AS vas_bunga_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Pot Bunga'), 0) AS pot_bunga_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Pot Bunga'), 0) AS pot_bunga_pos,
+				COALESCE(SUM(cd.inspected_count) FILTER (WHERE ct.name = 'Lain-lain'), 0) AS lain_lain_total,
+				COALESCE(SUM(cd.positive_count) FILTER (WHERE ct.name = 'Lain-lain'), 0) AS lain_lain_pos,
+				COALESCE(SUM(cd.inspected_count), 0) AS total_container,
+				COALESCE(SUM(cd.positive_count), 0) AS total_container_pos
+			FROM filtered_reports fr
+			LEFT JOIN container_details cd ON fr.id = cd.inspection_report_id
+			LEFT JOIN container_types ct ON cd.container_type_id = ct.id
+			GROUP BY fr.rt
+		)
+		SELECT
+			hs.rt, hs.rumah_diperiksa, hs.rumah_positif,
+			COALESCE(cs.bak_mandi_total, 0), COALESCE(cs.bak_mandi_pos, 0),
+			COALESCE(cs.tempayan_total, 0), COALESCE(cs.tempayan_pos, 0),
+			COALESCE(cs.pecahan_botol_total, 0), COALESCE(cs.pecahan_botol_pos, 0),
+			COALESCE(cs.barang_bekas_total, 0), COALESCE(cs.barang_bekas_pos, 0),
+			COALESCE(cs.kulkas_total, 0), COALESCE(cs.kulkas_pos, 0),
+			COALESCE(cs.tandon_air_total, 0), COALESCE(cs.tandon_air_pos, 0),
+			COALESCE(cs.vas_bunga_total, 0), COALESCE(cs.vas_bunga_pos, 0),
+			COALESCE(cs.pot_bunga_total, 0), COALESCE(cs.pot_bunga_pos, 0),
+			COALESCE(cs.lain_lain_total, 0), COALESCE(cs.lain_lain_pos, 0),
+			COALESCE(cs.total_container, 0), COALESCE(cs.total_container_pos, 0)
+		FROM house_stats hs
+		LEFT JOIN container_stats cs ON hs.rt = cs.rt
+		ORDER BY hs.rt ASC
+	`
 
 	rows, err := r.db.WithContext(ctx).Raw(query, args...).Rows()
 	if err != nil {
@@ -162,52 +189,45 @@ func (r *inspectionReportRepository) GetRecapData(ctx context.Context, userID, r
 func (r *inspectionReportRepository) GetExportData(ctx context.Context, userID, role string) ([]domain.InspectionReport, error) {
 	var reports []domain.InspectionReport
 
-	// Kita ambil laporan beserta Relasi Desa dan Relasi Jenis Wadah-nya
 	query := r.db.WithContext(ctx).
-		Preload("Village").
+		Joins("Village").
 		Preload("ContainerDetails.ContainerType").
-		Where("validation_status = ?", "accept")
+		Where("inspection_reports.validation_status = ?", "accept")
 
 	if role == "cadre" {
-		query = query.Where("village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
+		query = query.Where("inspection_reports.village_id = (SELECT village_id FROM users WHERE id = ?)", userID)
 	}
 
-	// Lakukan JOIN agar bisa mengurutkan dari A-Z berdasarkan Nama Desa, lalu RW, lalu RT
-	err := query.Joins("JOIN villages ON villages.id = inspection_reports.village_id").
-		Order("villages.name ASC, inspection_reports.rw ASC, inspection_reports.rt ASC").
+	err := query.
+		Order(`"Village".name ASC, inspection_reports.rw ASC, inspection_reports.rt ASC`).
 		Find(&reports).Error
 
 	return reports, err
 }
 
-// Ambil Riwayat Laporan Milik 1 Kader (Paginated dengan Filter)
 func (r *inspectionReportRepository) GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error) {
 	var reports []domain.InspectionReport
 	var totalData int64
 
-	// Base Query: Hanya laporan milik kader ini
-	baseQuery := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("user_id = ?", userID)
+	baseQuery := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("inspection_reports.user_id = ?", userID)
 
-	// FILTER
 	if search != "" {
-		// Menggunakan ILIKE untuk case-insensitive di PostgreSQL
-		baseQuery = baseQuery.Where("family_head_name ILIKE ?", "%"+search+"%")
+		baseQuery = baseQuery.Where("inspection_reports.family_head_name ILIKE ?", "%"+search+"%")
 	}
 	if rt != "" {
-		baseQuery = baseQuery.Where("rt = ?", rt)
+		baseQuery = baseQuery.Where("inspection_reports.rt = ?", rt)
 	}
 	if rw != "" {
-		baseQuery = baseQuery.Where("rw = ?", rw)
+		baseQuery = baseQuery.Where("inspection_reports.rw = ?", rw)
 	}
 	if villageID != "" {
-		baseQuery = baseQuery.Where("village_id = ?", villageID)
+		baseQuery = baseQuery.Where("inspection_reports.village_id = ?", villageID)
 	}
 	if date != "" {
-		// Mengambil laporan berdasarkan tanggal (mengabaikan jam)
-		baseQuery = baseQuery.Where("DATE(inspected_at) = ?", date)
+		// Gunakan range waktu agar index pada inspected_at tetap terpakai (DATE(inspected_at) mematikan index!)
+		baseQuery = baseQuery.Where("inspection_reports.inspected_at >= ?::date AND inspection_reports.inspected_at < (?::date + INTERVAL '1 day')", date, date)
 	}
 
-	// Hitung total data (setelah filter diterapkan)
 	if err := baseQuery.Count(&totalData).Error; err != nil {
 		return nil, 0, err
 	}
@@ -218,11 +238,10 @@ func (r *inspectionReportRepository) GetPaginatedHistory(ctx context.Context, us
 
 	offset := (page - 1) * limit
 
-	// Ambil data
 	err := baseQuery.
-		Preload("Village").
+		Joins("Village").
 		Preload("ContainerDetails.ContainerType").
-		Order("created_at DESC").
+		Order("inspection_reports.created_at DESC").
 		Limit(limit).
 		Offset(offset).
 		Find(&reports).Error
@@ -234,13 +253,11 @@ func (r *inspectionReportRepository) GetPaginatedHistory(ctx context.Context, us
 	return reports, totalData, nil
 }
 
-// Ambil Daftar Antrean Laporan untuk Petugas (Paginated)
 func (r *inspectionReportRepository) GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error) {
 	var reports []domain.InspectionReport
 	var totalData int64
 
-	// Base Query: Hanya status 'pending'
-	baseQuery := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("validation_status = ?", "pending")
+	baseQuery := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).Where("inspection_reports.validation_status = ?", "pending")
 
 	if err := baseQuery.Count(&totalData).Error; err != nil {
 		return nil, 0, err
@@ -251,12 +268,11 @@ func (r *inspectionReportRepository) GetPaginatedPending(ctx context.Context, pa
 
 	offset := (page - 1) * limit
 
-	// Ambil data (Urutkan dari yang paling LAMA / ASC, seperti antrean loket kasir / FIFO)
 	err := baseQuery.
-		Preload("User"). // Tampilkan siapa kadernya
-		Preload("Village").
+		Joins("User").
+		Joins("Village").
 		Preload("ContainerDetails.ContainerType").
-		Order("created_at ASC").
+		Order("inspection_reports.created_at ASC").
 		Limit(limit).
 		Offset(offset).
 		Find(&reports).Error
@@ -268,63 +284,62 @@ func (r *inspectionReportRepository) GetPaginatedPending(ctx context.Context, pa
 	return reports, totalData, nil
 }
 
-// Fungsi untuk menyimpan banyak laporan sekaligus (bulk insert)
+// Optimasi: Batch Insert + Single Bulk Spatial Update (dari 2N query menjadi 2 query)
 func (r *inspectionReportRepository) CreateBulk(ctx context.Context, reports []*domain.InspectionReport) error {
-	// Gunakan transaksi agar jika 1 gagal, semua dibatalkan (konsisten)
+	if len(reports) == 0 {
+		return nil
+	}
+
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, report := range reports {
-			// 1. Simpan Laporan Induk dan Detail Wadahnya
-			if err := tx.Omit("Geom").Create(report).Error; err != nil {
-				return err
-			}
-
-			// 2. Buat Spasial Titik PostGIS untuk laporan ini
-			geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?::float, ?::float), 4326)", report.Longitude, report.Latitude)
-
-			// Update kolom geom
-			if err := tx.Model(report).Update("geom", geomExpr).Error; err != nil {
-				return err
-			}
+		// 1. Insert batch sekaligus (ukuran batch 100 agar aman dari batas parameter PostgreSQL)
+		if err := tx.Omit("Geom").CreateInBatches(reports, 100).Error; err != nil {
+			return err
 		}
+
+		// 2. Update seluruh kolom geom sekaligus dalam 1 query SQL
+		ids := make([]string, 0, len(reports))
+		for _, rep := range reports {
+			ids = append(ids, rep.ID)
+		}
+
+		if err := tx.Exec(`
+			UPDATE inspection_reports
+			SET geom = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)
+			WHERE id IN ?
+		`, ids).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
 
-// BulkValidateReports bertugas memvalidasi banyak laporan sekaligus (accept/reject) berdasarkan ID yang diberikan.
 func (r *inspectionReportRepository) BulkValidateReports(ctx context.Context, reportIDs []string, status string, rejectionReason *string) error {
-	// Validasi status yang diterima
 	if status != "accept" && status != "reject" {
 		return errors.New("status validasi tidak dikenali")
 	}
 
-	// 1. Inisiasi map hanya dengan status
 	updateData := map[string]interface{}{
 		"validation_status": status,
 	}
 
-	// 2. Cek dan bongkar pointer secara manual
 	if rejectionReason != nil {
-		updateData["rejection_reason"] = *rejectionReason // Ambil nilai string-nya
+		updateData["rejection_reason"] = *rejectionReason
 	} else {
-		updateData["rejection_reason"] = nil // Gunakan nil murni (untyped nil) agar jadi NULL di database
+		updateData["rejection_reason"] = nil
 	}
 
-	// 3. Eksekusi update
-	result := r.db.WithContext(ctx).Model(&domain.InspectionReport{}).
+	return r.db.WithContext(ctx).Model(&domain.InspectionReport{}).
 		Where("id IN ?", reportIDs).
-		Updates(updateData)
-
-	return result.Error
+		Updates(updateData).Error
 }
 
 func (r *inspectionReportRepository) Update(ctx context.Context, reportID string, report *domain.InspectionReport) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 1. Hapus detail wadah lama agar tidak menumpuk
 		if err := tx.Where("inspection_report_id = ?", reportID).Delete(&domain.ContainerDetail{}).Error; err != nil {
 			return err
 		}
 
-		// 2. Update data induk (gunakan map agar GORM memperbarui nilai 0 atau string kosong)
 		updateData := map[string]interface{}{
 			"village_id":        report.VillageID,
 			"rt":                report.RT,
@@ -335,20 +350,18 @@ func (r *inspectionReportRepository) Update(ctx context.Context, reportID string
 			"larvae_status":     report.LarvaeStatus,
 			"photo_url":         report.PhotoURL,
 			"inspected_at":      report.InspectedAt,
-			"validation_status": "pending", // Reset status menjadi pending setiap kali diedit
+			"validation_status": "pending",
 		}
 
 		if err := tx.Model(&domain.InspectionReport{}).Where("id = ?", reportID).Updates(updateData).Error; err != nil {
 			return err
 		}
 
-		// 3. Update spatial point PostGIS
 		geomExpr := gorm.Expr("ST_SetSRID(ST_MakePoint(?::float, ?::float), 4326)", report.Longitude, report.Latitude)
 		if err := tx.Model(&domain.InspectionReport{}).Where("id = ?", reportID).Update("geom", geomExpr).Error; err != nil {
 			return err
 		}
 
-		// 4. Masukkan wadah baru yang diedit
 		for i := range report.ContainerDetails {
 			report.ContainerDetails[i].InspectionReportID = reportID
 		}

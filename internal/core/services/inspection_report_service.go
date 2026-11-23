@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ipincamp/radar-jentik-api/internal/core/domain"
@@ -13,57 +14,66 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+type mapCacheEntry struct {
+	data      []domain.InspectionReport
+	expiresAt time.Time
+}
+
 type inspectionReportService struct {
 	repo        ports.InspectionReportRepository
 	villageRepo ports.VillageRepository
+
+	cacheMu  sync.RWMutex
+	mapCache map[string]mapCacheEntry
 }
 
 func NewInspectionReportService(repo ports.InspectionReportRepository, villageRepo ports.VillageRepository) ports.InspectionReportService {
 	return &inspectionReportService{
 		repo:        repo,
 		villageRepo: villageRepo,
+		mapCache:    make(map[string]mapCacheEntry),
 	}
 }
 
-// CreateReport bertugas memproses payload dan memvalidasi aturan bisnis
+func (s *inspectionReportService) invalidateMapCache() {
+	s.cacheMu.Lock()
+	s.mapCache = make(map[string]mapCacheEntry)
+	s.cacheMu.Unlock()
+}
+
 func (s *inspectionReportService) CreateReport(ctx context.Context, report *domain.InspectionReport) error {
-	// Validasi input
-	// if report.PhotoURL == "" {
-	// 	return errors.New("foto bukti inspeksi lapangan wajib disertakan")
-	// }
-	// Validasi minimal harus melaporkan satu jenis wadah
 	if len(report.ContainerDetails) == 0 {
 		return errors.New("minimal harus melaporkan satu jenis wadah")
 	}
 
 	if report.VillageID == "" {
-		// Jika kader/frontend TIDAK mengirimkan ID Desa, kita auto-detect dari koordinat
 		village, err := s.villageRepo.GetByCoordinate(ctx, report.Latitude, report.Longitude)
 		if err != nil {
 			return errors.New("lokasi anda berada di luar wilayah, silakan pilih desa secara manual")
 		}
-		// Isi secara otomatis
 		report.VillageID = village.ID
 	}
 
-	report.LarvaeStatus = 0 // Asumsikan aman secara default
+	report.LarvaeStatus = 0
 	for _, container := range report.ContainerDetails {
 		if container.PositiveCount > 0 {
-			report.LarvaeStatus = 1 // Jika ketemu 1 saja yang positif, langsung tandai positif
-			break                   // Hentikan perulangan (hemat memori dan waktu komputasi)
+			report.LarvaeStatus = 1
+			break
 		}
 	}
 
-	// IsZero() akan bernilai true jika di Handler tadi r.InspectedAt kosong atau gagal di-parse.
 	if report.InspectedAt.IsZero() {
-		report.InspectedAt = time.Now() // Fallback: Gunakan jam server saat sinkronisasi
+		report.InspectedAt = time.Now()
 	}
 
-	// Set default value
 	report.ValidationStatus = "pending"
 
-	// Simpan ke database
-	return s.repo.Create(ctx, report)
+	if err := s.repo.Create(ctx, report); err != nil {
+		return err
+	}
+
+	s.invalidateMapCache()
+	return nil
 }
 
 func (s *inspectionReportService) GetCadreHistory(ctx context.Context, userID string) ([]domain.InspectionReport, error) {
@@ -78,7 +88,11 @@ func (s *inspectionReportService) ValidateReport(ctx context.Context, id string,
 	if status != "accept" && status != "reject" {
 		return errors.New("status validasi tidak dikenali")
 	}
-	return s.repo.UpdateStatus(ctx, id, status, nil)
+	if err := s.repo.UpdateStatus(ctx, id, status, nil); err != nil {
+		return err
+	}
+	s.invalidateMapCache()
+	return nil
 }
 
 func (s *inspectionReportService) UpdateStatus(ctx context.Context, reportID string, status string, rejectionReason *string) error {
@@ -90,20 +104,51 @@ func (s *inspectionReportService) UpdateStatus(ctx context.Context, reportID str
 		}
 		reasonPtr = rejectionReason
 	} else if status == "accept" {
-		reasonPtr = nil // Bersihkan alasan jika diterima
+		reasonPtr = nil
 	} else {
 		return errors.New("status tidak valid")
 	}
 
-	return s.repo.UpdateStatus(ctx, reportID, status, reasonPtr)
+	if err := s.repo.UpdateStatus(ctx, reportID, status, reasonPtr); err != nil {
+		return err
+	}
+	s.invalidateMapCache()
+	return nil
 }
 
 func (s *inspectionReportService) GetMapData(ctx context.Context, userID string, role string) ([]domain.InspectionReport, error) {
-	return s.repo.GetValidReports(ctx, userID, role)
+	cacheKey := role
+	if role == "cadre" {
+		cacheKey = "cadre:" + userID
+	}
+
+	// 1. Cek cache memori terlebih dahulu
+	s.cacheMu.RLock()
+	entry, exists := s.mapCache[cacheKey]
+	s.cacheMu.RUnlock()
+
+	if exists && time.Now().Before(entry.expiresAt) {
+		return entry.data, nil
+	}
+
+	// 2. Ambil dari database jika cache kosong/kedaluwarsa
+	reports, err := s.repo.GetValidReports(ctx, userID, role)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Simpan ke cache selama 2 menit
+	s.cacheMu.Lock()
+	s.mapCache[cacheKey] = mapCacheEntry{
+		data:      reports,
+		expiresAt: time.Now().Add(2 * time.Minute),
+	}
+	s.cacheMu.Unlock()
+
+	return reports, nil
 }
 
 func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, role string) ([]byte, string, error) {
-	// 1. Ambil Data Detail dari Repository
 	reports, err := s.repo.GetExportData(ctx, userID, role)
 	if err != nil {
 		return nil, "", err
@@ -117,13 +162,11 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 	if len(reports) == 0 {
 		var buf bytes.Buffer
 		f.Write(&buf)
-		// Jika kosong, beri nama file kosong
 		return buf.Bytes(), fmt.Sprintf("RadarJentik_%s_Kosong.xlsx", timeStr), nil
 	}
 
 	defaultSheet := f.GetSheetName(f.GetActiveSheetIndex())
 
-	// 2. Kelompokkan Data HANYA berdasarkan [Desa]
 	groupedReports := make(map[string][]domain.InspectionReport)
 	var orderedVillages []string
 
@@ -140,7 +183,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		"Kulkas/Dispenser", "Tandon Air", "Vas Bunga", "Pot Bunga", "Lain-lain",
 	}
 
-	// Array statis untuk memetakan kolom melebihi huruf 'Z' (Mencegah Bug ASCII)
 	excelCols := []string{
 		"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
 		"Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC",
@@ -155,7 +197,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		},
 	})
 
-	// 3. Buat Sheet Baru untuk Setiap Desa
 	for _, villageName := range orderedVillages {
 		sheetName := villageName
 		if len(sheetName) > 31 {
@@ -163,7 +204,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		}
 		f.NewSheet(sheetName)
 
-		// --- HEADER AKTUAL DESA ---
 		f.SetCellValue(sheetName, "A1", "Kabupaten")
 		f.SetCellValue(sheetName, "C1", ": Banyumas")
 		f.SetCellValue(sheetName, "A2", "Kecamatan")
@@ -173,7 +213,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		f.SetCellValue(sheetName, "A4", "Tanggal Unduh")
 		f.SetCellValue(sheetName, "C4", ": "+time.Now().Format("02 Jan 2006, 15:04 WIB"))
 
-		// --- TABEL HEADER ---
 		f.SetCellValue(sheetName, "A7", "No")
 		f.MergeCell(sheetName, "A7", "A8")
 
@@ -195,11 +234,10 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 		f.SetCellValue(sheetName, "G7", "Longitude")
 		f.MergeCell(sheetName, "G7", "G8")
 
-		// Kolom Wadah (Huruf H sampai Y)
 		f.SetCellValue(sheetName, "H7", "Container (Wadah)")
 		f.MergeCell(sheetName, "H7", "Y7")
 
-		colIdx := 7 // Index 7 merujuk ke huruf 'H' di excelCols
+		colIdx := 7
 		for _, name := range containers {
 			colName1 := excelCols[colIdx]
 			colName2 := excelCols[colIdx+1]
@@ -208,25 +246,26 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 			colIdx += 2
 		}
 
-		// Total Wadah di Z dan AA
 		f.SetCellValue(sheetName, "Z7", "Total Wadah")
 		f.MergeCell(sheetName, "Z7", "AA7")
 		f.SetCellValue(sheetName, "Z8", "Jml")
 		f.SetCellValue(sheetName, "AA8", "Pos")
 
-		// Status Jentik di AB
 		f.SetCellValue(sheetName, "AB7", "Status Jentik")
 		f.MergeCell(sheetName, "AB7", "AB8")
 
-		// Terapkan Styling Kotak/Garis Header
 		f.SetCellStyle(sheetName, "A7", "AB8", headerStyle)
 
-		// --- ISI TABEL (DATA DETAIL PER RUMAH) ---
 		startRow := 9
 		totalRumahDiperiksa := len(groupedReports[villageName])
 		totalRumahPositif := 0
 		totalKontainerSeluruh := 0
 		totalKontainerPositif := 0
+
+		type ContainerAgg struct {
+			Inspected int
+			Positive  int
+		}
 
 		for i, r := range groupedReports[villageName] {
 			row := startRow + i
@@ -234,10 +273,7 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 			f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), r.FamilyHeadName)
 			f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), r.RW)
 			f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), r.RT)
-
-			// Mengisi Waktu Diterima dengan format mudah dibaca (Misal: 30 Jun 2026, 14:05 WIB)
 			f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), r.CreatedAt.Format("02 Jan 2006, 15:04 WIB"))
-
 			f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), r.Latitude)
 			f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), r.Longitude)
 
@@ -248,35 +284,23 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 				f.SetCellValue(sheetName, fmt.Sprintf("AB%d", row), "Negatif")
 			}
 
-			type ContainerAgg struct {
-				Inspected int
-				Positive  int
-			}
-
-			cMap := make(map[string]ContainerAgg)
-
+			cMap := make(map[string]ContainerAgg, len(r.ContainerDetails))
 			for _, cd := range r.ContainerDetails {
 				if cd.ContainerType != nil {
 					typeName := cd.ContainerType.Name
-
-					// Ambil data agregasi saat ini (jika belum ada, nilai default-nya 0)
 					currentAgg := cMap[typeName]
-
-					// Tambahkan jumlah dari baris database saat ini
 					currentAgg.Inspected += cd.InspectedCount
 					currentAgg.Positive += cd.PositiveCount
-
-					// Simpan kembali ke map
 					cMap[typeName] = currentAgg
 				}
 			}
 
 			rowContainerTotal := 0
 			rowContainerPos := 0
-			colDataIdx := 7 // Index 7 = Huruf 'H'
+			colDataIdx := 7
 
 			for _, cName := range containers {
-				agg, exists := cMap[cName] // Mengambil struct agregasi
+				agg, exists := cMap[cName]
 				colName1 := excelCols[colDataIdx]
 				colName2 := excelCols[colDataIdx+1]
 
@@ -299,7 +323,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 			totalKontainerPositif += rowContainerPos
 		}
 
-		// --- FOOTER (REKAP KESELURUHAN DESA TSB) ---
 		footerRow := startRow + len(groupedReports[villageName]) + 2
 		abj, ci := 0.0, 0.0
 		if totalRumahDiperiksa > 0 {
@@ -331,10 +354,8 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 	if err := f.Write(&buf); err != nil {
 		return nil, "", err
 	}
-	villageNameForFile := "Semua_Desa" // Default jika petugas mendownload seluruh desa sekaligus
+	villageNameForFile := "Semua_Desa"
 	if len(orderedVillages) == 1 {
-		// Jika hanya ada 1 desa (misal diunduh oleh kader), gunakan nama desa tersebut.
-		// Spasi diganti underscore agar nama file rapi (misal: "Batu Anten" -> "Batu_Anten")
 		villageNameForFile = "Desa_" + strings.ReplaceAll(orderedVillages[0], " ", "_")
 	}
 
@@ -343,7 +364,6 @@ func (s *inspectionReportService) ExportToExcel(ctx context.Context, userID, rol
 	return buf.Bytes(), fileName, nil
 }
 
-// History
 func (s *inspectionReportService) GetPaginatedHistory(ctx context.Context, userID string, page, limit int, search, rt, rw, villageID, date string) ([]domain.InspectionReport, int64, error) {
 	if page < 1 {
 		page = 1
@@ -357,7 +377,6 @@ func (s *inspectionReportService) GetPaginatedHistory(ctx context.Context, userI
 	return s.repo.GetPaginatedHistory(ctx, userID, page, limit, search, rt, rw, villageID, date)
 }
 
-// Pending
 func (s *inspectionReportService) GetPaginatedPending(ctx context.Context, page, limit int) ([]domain.InspectionReport, int64, error) {
 	if page < 1 {
 		page = 1
@@ -371,17 +390,12 @@ func (s *inspectionReportService) GetPaginatedPending(ctx context.Context, page,
 	return s.repo.GetPaginatedPending(ctx, page, limit)
 }
 
-// Fungsi CreateBulkReport bertugas memproses beberapa laporan sekaligus, dengan validasi yang sama seperti CreateReport.
 func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports []*domain.InspectionReport) error {
 	for i, report := range reports {
-		// if report.PhotoURL == "" {
-		// 	return fmt.Errorf("laporan ke-%d: foto bukti wajib disertakan", i+1)
-		// }
 		if len(report.ContainerDetails) == 0 {
 			return fmt.Errorf("laporan ke-%d: minimal harus melaporkan satu jenis wadah", i+1)
 		}
 
-		// Logika Hybrid Pencarian Desa (Seperti pada insert biasa)
 		if report.VillageID == "" {
 			village, err := s.villageRepo.GetByCoordinate(ctx, report.Latitude, report.Longitude)
 			if err != nil {
@@ -398,7 +412,6 @@ func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports 
 			}
 		}
 
-		// IsZero() akan bernilai true jika di Handler tadi r.InspectedAt kosong atau gagal di-parse.
 		if report.InspectedAt.IsZero() {
 			report.InspectedAt = time.Now()
 		}
@@ -406,17 +419,25 @@ func (s *inspectionReportService) CreateBulkReport(ctx context.Context, reports 
 		report.ValidationStatus = "pending"
 	}
 
-	return s.repo.CreateBulk(ctx, reports)
+	if err := s.repo.CreateBulk(ctx, reports); err != nil {
+		return err
+	}
+
+	s.invalidateMapCache()
+	return nil
 }
 
-// BulkValidateReports bertugas memvalidasi banyak laporan sekaligus (accept/reject) berdasarkan ID yang diberikan.
 func (s *inspectionReportService) BulkValidateReports(ctx context.Context, reportIDs []string, status string, rejectionReason *string) error {
 	if status != "accept" && status != "reject" {
 		return errors.New("status validasi tidak dikenali")
 	}
 
-	// Teruskan parameter rejectionReason ke repository
-	return s.repo.BulkValidateReports(ctx, reportIDs, status, rejectionReason)
+	if err := s.repo.BulkValidateReports(ctx, reportIDs, status, rejectionReason); err != nil {
+		return err
+	}
+
+	s.invalidateMapCache()
+	return nil
 }
 
 func (s *inspectionReportService) UpdateReport(ctx context.Context, reportID string, report *domain.InspectionReport) error {
@@ -444,5 +465,10 @@ func (s *inspectionReportService) UpdateReport(ctx context.Context, reportID str
 		report.InspectedAt = time.Now()
 	}
 
-	return s.repo.Update(ctx, reportID, report)
+	if err := s.repo.Update(ctx, reportID, report); err != nil {
+		return err
+	}
+
+	s.invalidateMapCache()
+	return nil
 }
